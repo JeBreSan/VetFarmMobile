@@ -10,6 +10,8 @@ import { Card } from "../../src/ui/Card";
 import { Input } from "../../src/ui/Input";
 import { Toast } from "../../src/ui/Toast";
 
+import { setSessionUser } from "../../src/storage/session";
+
 export default function Login() {
   const router = useRouter();
   const { theme } = useAppTheme();
@@ -56,14 +58,37 @@ export default function Login() {
       return;
     }
 
+    // ✅ Armamos datos mínimos (sin depender de cómo venga el API)
+    const data: any = result.data ?? {};
+    const u = data.user ?? data.usuario ?? data.data?.user ?? data.data?.usuario ?? data;
+
+    const identificacion = String(u?.identificacion ?? usuario.trim());
+    const nombre = String(u?.nombre ?? data?.nombre ?? "Usuario");
+    const rol = (u?.rol === "admin" || data?.rol === "admin") ? "admin" : "usuario";
+    const id = Number(u?.id ?? data?.id ?? 0);
+
+    // ✅ Intento de guardar sesión (si falla, igual seguimos)
+    const saved = await setSessionUser({
+      id,
+      identificacion,
+      nombre,
+      rol,
+    });
+
     setToast({
       visible: true,
       text: result.data?.mensaje || "Inicio de sesión exitoso.",
       type: "success",
     });
 
-    // 📌 Luego guardamos usuario/rol en storage; por ahora navegamos
     setTimeout(() => {
+      // ✅ Si AsyncStorage falla (web a veces), pasamos params al dashboard
+      if (!saved) {
+        router.replace({ pathname: "/dashboard", params: { nombre, identificacion } } as any);
+        return;
+      }
+
+      // ✅ normal
       router.replace("/dashboard");
     }, 250);
   };
@@ -77,7 +102,6 @@ export default function Login() {
     >
       <View style={[styles.overlay, { backgroundColor: theme.colors.overlay }]} />
 
-      {/* blobs decorativos */}
       <View style={[styles.blob, { backgroundColor: "rgba(255,255,255,0.18)", top: -90, left: -60 }]} />
       <View style={[styles.blob, { backgroundColor: "rgba(0,0,0,0.16)", bottom: -110, right: -70 }]} />
       <View style={[styles.blobSmall, { backgroundColor: "rgba(255,255,255,0.12)", top: 120, right: -40 }]} />

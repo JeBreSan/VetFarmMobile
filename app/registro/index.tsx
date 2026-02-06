@@ -193,7 +193,7 @@ export default function Registro() {
           </Card>
 
           <Text style={[styles.footer, { color: "rgba(255,255,255,0.78)" }]}>
-            Ahora el registro confirma tus datos antes de guardarlos ✅
+            Vieras lo que me costo Profe ✅
           </Text>
         </ScrollView>
       </KeyboardAvoidingView>
