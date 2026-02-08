@@ -1,7 +1,11 @@
 LEVANTAR API
 cd C:\Users\a\Desktop\VetFarmMobile\api
 npm run dev
+------------------------------------------------
 LEVANTAR APP
 cd C:\Users\a\Desktop\VetFarmMobile
 npx expo start
+------------------------------------------------
+https://vetfarmmobile.onrender.com/health
+-------------------------------------------------
 
