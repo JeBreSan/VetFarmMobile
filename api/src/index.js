@@ -3,8 +3,10 @@ dotenv.config();
 
 import cors from "cors";
 import express from "express";
+
 import { pool } from "./config/db.js";
 import authRoutes from "./routes/auth.routes.js";
+import perfilRoutes from "./routes/perfil.routes.js";
 
 const app = express();
 
@@ -26,6 +28,9 @@ app.get("/health", async (req, res) => {
 });
 
 app.use("/auth", authRoutes);
+
+// ✅ PERFIL (nuevo)
+app.use("/perfil", perfilRoutes);
 
 const PORT = process.env.PORT || 3000;
 
