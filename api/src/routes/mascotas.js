@@ -1,4 +1,3 @@
-// api/src/routes/mascotas.routes.js
 import { Router } from "express";
 import {
     actualizarMascota,

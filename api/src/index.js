@@ -7,7 +7,7 @@ import express from "express";
 import { pool } from "./config/db.js";
 import { requireUser } from "./middlewares/requireUser.js";
 import authRoutes from "./routes/auth.routes.js";
-import mascotasRoutes from "./routes/mascotas.routes.js";
+import mascotasRoutes from "./routes/mascotas.js";
 import perfilRoutes from "./routes/perfil.routes.js";
 
 const app = express();
