@@ -5,10 +5,10 @@ import cors from "cors";
 import express from "express";
 
 import { pool } from "./config/db.js";
+import { requireUser } from "./middlewares/requireUser.js";
 import authRoutes from "./routes/auth.routes.js";
 import mascotasRoutes from "./routes/mascotas.routes.js";
 import perfilRoutes from "./routes/perfil.routes.js";
-
 
 const app = express();
 
@@ -33,7 +33,9 @@ app.use("/auth", authRoutes);
 
 // ✅ PERFIL (nuevo)
 app.use("/perfil", perfilRoutes);
-app.use("/mascotas", mascotasRoutes);
+
+// ✅ MASCOTAS (protegido)
+app.use("/mascotas", requireUser, mascotasRoutes);
 
 const PORT = process.env.PORT || 3000;
 
