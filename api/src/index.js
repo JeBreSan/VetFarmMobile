@@ -15,12 +15,12 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// 🔹 Endpoint base (NO TOCAR)
+// ✅ NO TOCAR
 app.get("/", (req, res) => {
   res.json({ mensaje: "API VetFarm funcionando correctamente" });
 });
 
-// 🔎 Health check (BD)
+// 🔎 Health check (prueba de conexión a Supabase)
 app.get("/health", async (req, res) => {
   try {
     const r = await pool.query("select now() as now");
@@ -30,18 +30,15 @@ app.get("/health", async (req, res) => {
   }
 });
 
-// 🧪 Endpoint de versión (TEMPORAL para Render)
+// 🧪 Diagnóstico de versión (para validar deploy)
 app.get("/version", (req, res) => {
   res.json({ version: "mascotas-v1" });
 });
 
-// 🔐 AUTH
 app.use("/auth", authRoutes);
-
-// 👤 PERFIL
 app.use("/perfil", perfilRoutes);
 
-// 🐶 MASCOTAS (PROTEGIDO)
+// ✅ MASCOTAS (protegido)
 app.use("/mascotas", requireUser, mascotasRoutes);
 
 const PORT = process.env.PORT || 3000;
