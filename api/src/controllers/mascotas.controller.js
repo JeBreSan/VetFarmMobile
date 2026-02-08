@@ -1,178 +1,202 @@
-// api/src/controllers/mascotas.controller.js
 import { pool } from "../config/db.js";
 
-const ESPECIES_VALIDAS = new Set(["perro", "gato", "ave", "roedor", "reptil", "otro"]);
+// Helpers
+function getUser(req) {
+  const id = Number(req.user?.id);
+  const rol = String(req.user?.rol ?? "").toLowerCase();
+  return { id, rol };
+}
 
-const t = (v) => (typeof v === "string" ? v.trim() : "");
-
+// GET /mascotas
 export const listarMascotas = async (req, res) => {
   try {
-    const { id, rol } = req.user;
+    const { id: userId } = getUser(req);
 
-    let sql = `
-      select id, nombre, especie, raza, edad, propietario_id, created_at, updated_at, activo
-      from public.mascotas
-      where activo = true
-    `;
-    const params = [];
+    const r = await pool.query(
+      `SELECT id, nombre, especie, raza, edad, propietario_id, created_at, updated_at, activo
+       FROM mascotas
+       WHERE propietario_id = $1 AND activo = true
+       ORDER BY id DESC`,
+      [userId]
+    );
 
-    if (rol !== "admin") {
-      sql += " and propietario_id = $1";
-      params.push(id);
-    }
-
-    sql += " order by created_at desc";
-
-    const r = await pool.query(sql, params);
     return res.json(r.rows);
   } catch (e) {
-    console.error("listarMascotas:", e);
-    return res.status(500).json({ mensaje: "Error al obtener las mascotas." });
+    console.error("listarMascotas error:", e);
+    return res.status(500).json({ mensaje: "Error interno del servidor." });
   }
 };
 
+// POST /mascotas
 export const crearMascota = async (req, res) => {
   try {
-    const { id: propietario_id } = req.user;
+    const { id: userId } = getUser(req);
+    const { nombre, especie, raza, edad } = req.body;
 
-    const nombre = t(req.body?.nombre);
-    const especie = t(req.body?.especie).toLowerCase();
-    const raza = t(req.body?.raza);
-    const edad = t(req.body?.edad);
-
-    if (!nombre || !especie) {
-      return res.status(400).json({ mensaje: "Nombre y especie son obligatorios." });
-    }
-
-    if (!ESPECIES_VALIDAS.has(especie)) {
-      return res.status(400).json({ mensaje: "Especie inválida." });
+    if (!nombre?.trim() || !especie?.trim()) {
+      return res.status(400).json({
+        mensaje: "Datos incompletos. Nombre y especie son requeridos.",
+      });
     }
 
     const r = await pool.query(
-      `
-      insert into public.mascotas (nombre, especie, raza, edad, propietario_id)
-      values ($1, $2, $3, $4, $5)
-      returning id, nombre, especie, raza, edad, propietario_id, created_at, updated_at, activo
-      `,
-      [nombre, especie, raza || null, edad || null, propietario_id]
+      `INSERT INTO mascotas (nombre, especie, raza, edad, propietario_id, activo)
+       VALUES ($1,$2,$3,$4,$5,true)
+       RETURNING id, nombre, especie, raza, edad, propietario_id, created_at, updated_at, activo`,
+      [
+        nombre.trim(),
+        String(especie).trim().toLowerCase(),
+        raza?.trim() ? raza.trim() : null,
+        edad?.trim() ? edad.trim() : null,
+        userId,
+      ]
     );
 
     return res.status(201).json(r.rows[0]);
   } catch (e) {
-    console.error("crearMascota:", e);
-    return res.status(500).json({ mensaje: "Error al crear la mascota." });
+    console.error("crearMascota error:", e);
+    return res.status(500).json({ mensaje: "Error interno del servidor." });
   }
 };
 
+// PUT /mascotas/:id
 export const actualizarMascota = async (req, res) => {
   try {
+    const { id: userId, rol } = getUser(req);
     const mascotaId = Number(req.params.id);
-    const { id: usuarioId, rol } = req.user;
 
-    if (!mascotaId || mascotaId <= 0) {
-      return res.status(400).json({ mensaje: "ID de mascota inválido." });
+    if (!Number.isFinite(mascotaId) || mascotaId <= 0) {
+      return res.status(400).json({ mensaje: "Id inválido." });
     }
 
-    const r0 = await pool.query(
-      `
-      select id, nombre, especie, raza, edad, propietario_id
-      from public.mascotas
-      where id = $1 and activo = true
-      `,
+    const existe = await pool.query(
+      `SELECT id, propietario_id, activo FROM mascotas WHERE id = $1 LIMIT 1`,
       [mascotaId]
     );
 
-    if (r0.rows.length === 0) {
+    if (existe.rows.length === 0) {
       return res.status(404).json({ mensaje: "Mascota no encontrada." });
     }
 
-    const mascota = r0.rows[0];
+    const m = existe.rows[0];
+    const ownerId = Number(m.propietario_id); // 👈 CLAVE
 
-    // Permisos por dueño (usuario) / admin
-    if (rol !== "admin" && mascota.propietario_id !== usuarioId) {
-      return res.status(403).json({ mensaje: "No tienes permiso para editar esta mascota." });
+    if (!m.activo) {
+      return res.status(404).json({ mensaje: "Mascota no encontrada." });
     }
 
-    // Regla clave: usuario NO cambia especie
-    const especieBody = t(req.body?.especie);
-    if (rol !== "admin" && especieBody && especieBody.toLowerCase() !== mascota.especie) {
-      return res.status(403).json({ mensaje: "No puedes cambiar la especie de la mascota." });
+    // Permisos: admin o dueño
+    if (rol !== "admin" && ownerId !== userId) {
+      // Debug útil (dejalo por ahora para confirmar en logs de Render)
+      console.log("403 perms", { userId, ownerId, rol, mascotaId });
+      return res.status(403).json({ mensaje: "Prohibido." });
     }
 
-    // Admin puede cambiar especie (validada)
-    let especieFinal = mascota.especie;
-    if (rol === "admin" && especieBody) {
-      const esp = especieBody.toLowerCase();
-      if (!ESPECIES_VALIDAS.has(esp)) {
-        return res.status(400).json({ mensaje: "Especie inválida." });
+    const { nombre, edad, especie, raza } = req.body;
+
+    // Usuario NO puede cambiar especie/raza
+    if (rol !== "admin") {
+      if (typeof especie !== "undefined" || typeof raza !== "undefined") {
+        return res.status(403).json({
+          mensaje: "Prohibido. No puede cambiar especie/raza.",
+        });
       }
-      especieFinal = esp;
     }
 
-    const nombreBody = t(req.body?.nombre);
-    const razaBody = t(req.body?.raza);
-    const edadBody = t(req.body?.edad);
+    // Construir update dinámico
+    const fields = [];
+    const values = [];
+    let idx = 1;
 
-    const nombreFinal = nombreBody || mascota.nombre;
-    const razaFinal = razaBody ? razaBody : (razaBody === "" ? null : mascota.raza);
-    const edadFinal = edadBody ? edadBody : (edadBody === "" ? null : mascota.edad);
+    if (typeof nombre !== "undefined") {
+      const n = String(nombre).trim();
+      if (!n) return res.status(400).json({ mensaje: "Nombre inválido." });
+      fields.push(`nombre = $${idx++}`);
+      values.push(n);
+    }
 
-    const r1 = await pool.query(
-      `
-      update public.mascotas
-      set nombre = $1,
-          especie = $2,
-          raza = $3,
-          edad = $4
-      where id = $5
-      returning id, nombre, especie, raza, edad, propietario_id, created_at, updated_at, activo
-      `,
-      [nombreFinal, especieFinal, razaFinal, edadFinal, mascotaId]
-    );
+    if (typeof edad !== "undefined") {
+      const e = String(edad).trim();
+      fields.push(`edad = $${idx++}`);
+      values.push(e ? e : null);
+    }
 
-    return res.json(r1.rows[0]);
+    if (rol === "admin") {
+      if (typeof especie !== "undefined") {
+        const s = String(especie).trim().toLowerCase();
+        if (!s) return res.status(400).json({ mensaje: "Especie inválida." });
+        fields.push(`especie = $${idx++}`);
+        values.push(s);
+      }
+
+      if (typeof raza !== "undefined") {
+        const rza = String(raza).trim();
+        fields.push(`raza = $${idx++}`);
+        values.push(rza ? rza : null);
+      }
+    }
+
+    if (fields.length === 0) {
+      return res.status(400).json({ mensaje: "No hay campos para actualizar." });
+    }
+
+    fields.push(`updated_at = now()`);
+
+    values.push(mascotaId);
+    const q = `
+      UPDATE mascotas
+      SET ${fields.join(", ")}
+      WHERE id = $${idx}
+      RETURNING id, nombre, especie, raza, edad, propietario_id, created_at, updated_at, activo
+    `;
+
+    const updated = await pool.query(q, values);
+    return res.json(updated.rows[0]);
   } catch (e) {
-    console.error("actualizarMascota:", e);
-    return res.status(500).json({ mensaje: "Error al actualizar la mascota." });
+    console.error("actualizarMascota error:", e);
+    return res.status(500).json({ mensaje: "Error interno del servidor." });
   }
 };
 
+// DELETE /mascotas/:id (soft delete)
 export const eliminarMascota = async (req, res) => {
   try {
+    const { id: userId, rol } = getUser(req);
     const mascotaId = Number(req.params.id);
-    const { id: usuarioId, rol } = req.user;
 
-    if (!mascotaId || mascotaId <= 0) {
-      return res.status(400).json({ mensaje: "ID de mascota inválido." });
+    if (!Number.isFinite(mascotaId) || mascotaId <= 0) {
+      return res.status(400).json({ mensaje: "Id inválido." });
     }
 
-    const r0 = await pool.query(
-      `
-      select id, propietario_id
-      from public.mascotas
-      where id = $1 and activo = true
-      `,
+    const existe = await pool.query(
+      `SELECT id, propietario_id, activo FROM mascotas WHERE id = $1 LIMIT 1`,
       [mascotaId]
     );
 
-    if (r0.rows.length === 0) {
+    if (existe.rows.length === 0) {
       return res.status(404).json({ mensaje: "Mascota no encontrada." });
     }
 
-    const mascota = r0.rows[0];
+    const m = existe.rows[0];
+    const ownerId = Number(m.propietario_id); // 👈 CLAVE
 
-    if (rol !== "admin" && mascota.propietario_id !== usuarioId) {
-      return res.status(403).json({ mensaje: "No tienes permiso para eliminar esta mascota." });
+    if (!m.activo) {
+      return res.status(404).json({ mensaje: "Mascota no encontrada." });
+    }
+
+    if (rol !== "admin" && ownerId !== userId) {
+      console.log("403 delete perms", { userId, ownerId, rol, mascotaId });
+      return res.status(403).json({ mensaje: "Prohibido." });
     }
 
     await pool.query(
-      `update public.mascotas set activo = false where id = $1`,
+      `UPDATE mascotas SET activo = false, updated_at = now() WHERE id = $1`,
       [mascotaId]
     );
 
-    return res.json({ mensaje: "Mascota eliminada correctamente." });
+    return res.json({ mensaje: "Mascota eliminada." });
   } catch (e) {
-    console.error("eliminarMascota:", e);
-    return res.status(500).json({ mensaje: "Error al eliminar la mascota." });
+    console.error("eliminarMascota error:", e);
+    return res.status(500).json({ mensaje: "Error interno del servidor." });
   }
 };
