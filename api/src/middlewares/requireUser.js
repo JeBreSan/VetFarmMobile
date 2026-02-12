@@ -1,14 +1,16 @@
-// api/src/middlewares/requireUser.js
-
 export function requireUser(req, res, next) {
-  const id = Number(req.headers["x-user-id"]);
-  const rolHeader = String(req.headers["x-user-rol"] || "usuario");
+  const rawId = req.header("x-user-id");
+  const rol = req.header("x-user-rol");
 
-  if (!id || id <= 0) {
-    return res.status(401).json({ mensaje: "No autorizado. Usuario no identificado." });
+  const id = Number(rawId);
+
+  if (!rawId || !Number.isFinite(id) || id <= 0) {
+    return res.status(401).json({ mensaje: "No autenticado. Falta x-user-id." });
   }
 
-  const rol = rolHeader === "admin" ? "admin" : "usuario";
+  if (rol !== "usuario" && rol !== "admin") {
+    return res.status(401).json({ mensaje: "No autenticado. Falta x-user-rol." });
+  }
 
   req.user = { id, rol };
   next();

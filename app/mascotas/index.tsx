@@ -1,19 +1,572 @@
-import React from "react";
-import { StyleSheet, Text, View } from "react-native";
+import { LinearGradient } from "expo-linear-gradient";
+import { useRouter } from "expo-router";
+import React, { useEffect, useMemo, useState } from "react";
+import {
+  ActivityIndicator,
+  Alert,
+  FlatList,
+  Pressable,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from "react-native";
 
-export default function Mascotas() {
+import {
+  apiActualizarMascota,
+  apiCrearMascota,
+  apiEliminarMascota,
+  apiListarMascotas,
+  type Mascota,
+} from "../../src/services/mascotasService";
+
+import { getSessionUser } from "../../src/storage/session";
+import { useAppTheme } from "../../src/theme/ThemeProvider";
+
+type Especie = "perro" | "gato" | "ave" | "roedor" | "reptil" | "otro";
+const ESPECIES: Especie[] = ["perro", "gato", "ave", "roedor", "reptil", "otro"];
+
+export default function MascotasScreen() {
+  const router = useRouter();
+  const { theme } = useAppTheme();
+
+  // ✅ IMPORTANTE: el gradiente NO va en StyleSheet.create (rompe Web)
+  const gradient = (((theme as any)?.colors?.gradient) ?? ["#6D28D9", "#2563EB", "#10B981"]) as any;
+
+
+  const styles = useMemo(() => createStyles(theme), [theme]);
+
+  const [usuarioNombre, setUsuarioNombre] = useState<string>("");
+
+  const [loading, setLoading] = useState(true);
+  const [mascotas, setMascotas] = useState<Mascota[]>([]);
+  const [selected, setSelected] = useState<Mascota | null>(null);
+
+  // paneles
+  const [showFicha, setShowFicha] = useState(false);
+  const [showCitas, setShowCitas] = useState(false);
+
+  // crear
+  const [showCrear, setShowCrear] = useState(false);
+  const [cNombre, setCNombre] = useState("");
+  const [cEspecie, setCEspecie] = useState<Especie>("perro");
+  const [cRaza, setCRaza] = useState("");
+  const [cEdad, setCEdad] = useState("");
+
+  // editar
+  const [eNombre, setENombre] = useState("");
+  const [eRaza, setERaza] = useState("");
+  const [eEdad, setEEdad] = useState("");
+
+  async function cargar() {
+    try {
+      setLoading(true);
+      const u = await getSessionUser();
+      setUsuarioNombre(u?.nombre ?? "");
+
+      const data = await apiListarMascotas();
+      setMascotas(data);
+    } catch (e: any) {
+      Alert.alert("Error", e?.message ?? "No se pudo cargar mascotas");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    cargar();
+  }, []);
+
+  function seleccionarMascota(m: Mascota) {
+    // al tocar otra, ocultamos paneles (como pediste)
+    setSelected(m);
+    setShowFicha(false);
+    setShowCitas(false);
+
+    // precargar inputs de edición
+    setENombre(m.nombre);
+    setERaza(m.raza ?? "");
+    setEEdad(m.edad ?? "");
+  }
+
+  function cerrarPaneles() {
+    setShowFicha(false);
+    setShowCitas(false);
+  }
+
+  function abrirFicha() {
+    if (!selected) return;
+    setShowFicha(true);
+    setShowCitas(true);
+  }
+
+  function abrirNueva() {
+    setShowCrear(true);
+    setCNombre("");
+    setCEspecie("perro");
+    setCRaza("");
+    setCEdad("");
+  }
+
+  async function crearMascota() {
+    if (!cNombre.trim()) {
+      Alert.alert("Validación", "El nombre es requerido");
+      return;
+    }
+    if (!cEspecie) {
+      Alert.alert("Validación", "La especie es requerida");
+      return;
+    }
+
+    try {
+      setLoading(true);
+      await apiCrearMascota({
+        nombre: cNombre.trim(),
+        especie: cEspecie,
+        raza: cRaza.trim() ? cRaza.trim() : undefined,
+        edad: cEdad.trim() ? cEdad.trim() : undefined,
+      });
+
+      setShowCrear(false);
+      await cargar();
+    } catch (e: any) {
+      Alert.alert("Error", e?.message ?? "No se pudo crear");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function guardarEdicion() {
+    if (!selected) return;
+
+    if (!eNombre.trim()) {
+      Alert.alert("Validación", "El nombre no puede estar vacío");
+      return;
+    }
+
+    try {
+      setLoading(true);
+      const updated = await apiActualizarMascota(selected.id, {
+        nombre: eNombre.trim(),
+        raza: eRaza.trim(),
+        edad: eEdad.trim(),
+      });
+
+      setSelected(updated);
+      await cargar();
+    } catch (e: any) {
+      Alert.alert("Error", e?.message ?? "No se pudo actualizar");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function eliminarMascota() {
+    if (!selected) return;
+
+    Alert.alert("Eliminar mascota", `¿Desea eliminar a "${selected.nombre}"?`, [
+      { text: "Cancelar", style: "cancel" },
+      {
+        text: "Eliminar",
+        style: "destructive",
+        onPress: async () => {
+          try {
+            setLoading(true);
+            await apiEliminarMascota(selected.id);
+            setSelected(null);
+            cerrarPaneles();
+            await cargar();
+          } catch (e: any) {
+            Alert.alert("Error", e?.message ?? "No se pudo eliminar");
+          } finally {
+            setLoading(false);
+          }
+        },
+      },
+    ]);
+  }
+
   return (
-    <View style={styles.screen}>
-      <Text style={styles.title}>Mis Mascotas</Text>
-      <Text style={styles.text}>Aquí va el CRUD de mascotas.</Text>
-      <Text style={styles.text}>Usuario: puede editar nombre ✅</Text>
-      <Text style={styles.text}>Admin: puede editar raza/especie ✅</Text>
-    </View>
+    <LinearGradient
+      colors={gradient}
+      start={{ x: 0, y: 0 }}
+      end={{ x: 1, y: 1 }}
+      style={styles.screen}
+    >
+      {/* Header */}
+      <View style={styles.header}>
+        <View>
+          <Text style={styles.title}>Mascotas de {usuarioNombre || "Usuario"}</Text>
+          <Text style={styles.subtitle}>
+            Seleccioná una mascota (la ficha se abre con “Ver ficha”).
+          </Text>
+        </View>
+
+        <View style={styles.headerBtns}>
+          <Pressable style={styles.btnGhost} onPress={() => router.push("/dashboard" as any)}>
+            <Text style={styles.btnText}>Volver</Text>
+          </Pressable>
+
+          <Pressable style={styles.btnPrimary} onPress={abrirNueva}>
+            <Text style={styles.btnText}>Nueva</Text>
+          </Pressable>
+        </View>
+      </View>
+
+      {loading && <ActivityIndicator style={{ marginVertical: 10 }} />}
+
+      {/* Layout 3 columnas */}
+      <View style={styles.grid}>
+        {/* Col 1: lista */}
+        <View style={styles.colLeft}>
+          <Text style={styles.sectionTitle}>Mis mascotas</Text>
+
+          <View style={styles.card}>
+            <FlatList
+              data={mascotas}
+              keyExtractor={(m) => String(m.id)}
+              renderItem={({ item }) => {
+                const active = selected?.id === item.id;
+                return (
+                  <Pressable
+                    onPress={() => seleccionarMascota(item)}
+                    style={[styles.listItem, active ? styles.listItemActive : null]}
+                  >
+                    <Text style={styles.listTitle}>{item.nombre}</Text>
+                    <Text style={styles.listMeta}>
+                      {item.especie} • {item.edad ? `${item.edad} años` : "—"}
+                    </Text>
+                  </Pressable>
+                );
+              }}
+              ListEmptyComponent={
+                !loading ? <Text style={styles.empty}>Aún no tenés mascotas registradas.</Text> : null
+              }
+            />
+          </View>
+
+          <View style={styles.row}>
+            <Pressable
+              style={[styles.btnGhost, { flex: 1, opacity: selected ? 1 : 0.45 }]}
+              onPress={abrirFicha}
+              disabled={!selected}
+            >
+              <Text style={styles.btnText}>Ver ficha</Text>
+            </Pressable>
+
+            <Pressable style={[styles.btnGhost, { flex: 1 }]} onPress={cerrarPaneles}>
+              <Text style={styles.btnText}>Cerrar</Text>
+            </Pressable>
+          </View>
+        </View>
+
+        {/* Col 2: ficha */}
+        <View style={styles.colMid}>
+          <Text style={styles.sectionTitle}>Ficha</Text>
+
+          {!showFicha ? (
+            <View style={styles.placeholderCard}>
+              <Text style={styles.placeholderText}>
+                Seleccioná una mascota y presioná “Ver ficha”.
+              </Text>
+            </View>
+          ) : (
+            <View style={styles.card}>
+              <Text style={styles.cardTitle}>{selected?.nombre}</Text>
+
+              <Text style={styles.meta}>Especie: {selected?.especie}</Text>
+              <Text style={styles.meta}>Raza: {selected?.raza ?? "—"}</Text>
+              <Text style={styles.meta}>Edad: {selected?.edad ?? "—"}</Text>
+
+              <View style={styles.divider} />
+
+              <Text style={styles.formTitle}>Editar</Text>
+
+              <Text style={styles.label}>Nombre</Text>
+              <TextInput
+                value={eNombre}
+                onChangeText={setENombre}
+                style={styles.input}
+                placeholder="Nombre"
+                placeholderTextColor="rgba(255,255,255,0.75)"
+              />
+
+              <Text style={styles.label}>Raza</Text>
+              <TextInput
+                value={eRaza}
+                onChangeText={setERaza}
+                style={styles.input}
+                placeholder="Raza"
+                placeholderTextColor="rgba(255,255,255,0.75)"
+              />
+
+              <Text style={styles.label}>Edad</Text>
+              <TextInput
+                value={eEdad}
+                onChangeText={setEEdad}
+                style={styles.input}
+                placeholder="Edad"
+                placeholderTextColor="rgba(255,255,255,0.75)"
+                keyboardType="numeric"
+              />
+
+              <View style={styles.row}>
+                <Pressable style={[styles.btnPrimary, { flex: 1 }]} onPress={guardarEdicion}>
+                  <Text style={styles.btnText}>Guardar</Text>
+                </Pressable>
+
+                <Pressable style={[styles.btnDanger, { flex: 1 }]} onPress={eliminarMascota}>
+                  <Text style={styles.btnText}>Eliminar</Text>
+                </Pressable>
+              </View>
+            </View>
+          )}
+        </View>
+
+        {/* Col 3: citas (placeholder) */}
+        <View style={styles.colRight}>
+          <Text style={styles.sectionTitle}>Citas</Text>
+
+          {!showCitas ? (
+            <View style={styles.placeholderCard}>
+              <Text style={styles.placeholderText}>
+                Seleccioná una mascota y abrí la ficha para ver sus citas.
+              </Text>
+            </View>
+          ) : (
+            <View style={styles.card}>
+              <Text style={styles.cardTitle}>Historial de citas</Text>
+              <Text style={styles.meta}>(Placeholder) Aquí luego listamos citas de: {selected?.nombre}</Text>
+            </View>
+          )}
+        </View>
+      </View>
+
+      {/* Modal Crear */}
+      {showCrear && (
+        <View style={styles.modalWrap}>
+          <View style={styles.modal}>
+            <Text style={styles.modalTitle}>Nueva mascota</Text>
+
+            <Text style={styles.label}>Nombre *</Text>
+            <TextInput
+              value={cNombre}
+              onChangeText={setCNombre}
+              style={styles.input}
+              placeholder="Ej: Gordo"
+              placeholderTextColor="rgba(255,255,255,0.75)"
+            />
+
+            <Text style={styles.label}>Especie *</Text>
+            <View style={styles.chipsRow}>
+              {ESPECIES.map((e) => {
+                const active = cEspecie === e;
+                return (
+                  <Pressable
+                    key={e}
+                    onPress={() => setCEspecie(e)}
+                    style={[styles.chip, active ? styles.chipActive : null]}
+                  >
+                    <Text style={styles.chipText}>{e}</Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+
+            <View style={styles.row}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.label}>Edad</Text>
+                <TextInput
+                  value={cEdad}
+                  onChangeText={setCEdad}
+                  style={styles.input}
+                  placeholder="Ej: 14"
+                  placeholderTextColor="rgba(255,255,255,0.75)"
+                  keyboardType="numeric"
+                />
+              </View>
+
+              <View style={{ flex: 1 }}>
+                <Text style={styles.label}>Raza</Text>
+                <TextInput
+                  value={cRaza}
+                  onChangeText={setCRaza}
+                  style={styles.input}
+                  placeholder="Ej: criollo"
+                  placeholderTextColor="rgba(255,255,255,0.75)"
+                />
+              </View>
+            </View>
+
+            <View style={styles.row}>
+              <Pressable style={[styles.btnGhost, { flex: 1 }]} onPress={() => setShowCrear(false)}>
+                <Text style={styles.btnText}>Cancelar</Text>
+              </Pressable>
+
+              <Pressable style={[styles.btnPrimary, { flex: 1 }]} onPress={crearMascota}>
+                <Text style={styles.btnText}>Crear</Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      )}
+    </LinearGradient>
   );
 }
 
-const styles = StyleSheet.create({
-  screen: { flex: 1, padding: 16, backgroundColor: "#0B1220" },
-  title: { color: "#fff", fontSize: 22, fontWeight: "800", marginBottom: 8 },
-  text: { color: "rgba(255,255,255,0.8)", marginTop: 6 },
-});
+function createStyles(theme: any) {
+  const text = theme?.colors?.text ?? "#FFFFFF";
+  const muted = "rgba(255,255,255,0.75)";
+  const border = "rgba(255,255,255,0.18)";
+  const card = "rgba(255,255,255,0.14)";
+  const card2 = "rgba(255,255,255,0.18)";
+
+  return StyleSheet.create({
+    screen: { flex: 1, padding: 16 },
+
+    header: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+      gap: 12,
+      marginBottom: 12,
+    },
+    title: { color: text, fontSize: 22, fontWeight: "900" },
+    subtitle: { color: muted, marginTop: 4 },
+
+    headerBtns: { flexDirection: "row", gap: 10 },
+
+    grid: { flex: 1, flexDirection: "row", gap: 14 },
+
+    colLeft: { width: 380, gap: 10 },
+    colMid: { flex: 1, gap: 10 },
+    colRight: { width: 340, gap: 10 },
+
+    sectionTitle: { color: text, fontWeight: "900", marginBottom: 4 },
+
+    card: {
+      backgroundColor: card,
+      borderRadius: 16,
+      padding: 12,
+      borderWidth: 1,
+      borderColor: border,
+    },
+
+    placeholderCard: {
+      backgroundColor: card2,
+      borderRadius: 16,
+      padding: 14,
+      borderWidth: 1,
+      borderColor: border,
+      minHeight: 86,
+      justifyContent: "center",
+    },
+    placeholderText: { color: muted },
+
+    listItem: {
+      paddingVertical: 10,
+      paddingHorizontal: 12,
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: "transparent",
+      marginBottom: 10,
+      backgroundColor: "rgba(255,255,255,0.10)",
+    },
+    listItemActive: {
+      borderColor: "rgba(255,255,255,0.35)",
+      backgroundColor: "rgba(255,255,255,0.16)",
+    },
+    listTitle: { color: text, fontWeight: "900" },
+    listMeta: { color: muted, marginTop: 4, fontSize: 12 },
+
+    empty: { color: muted, paddingVertical: 10 },
+
+    cardTitle: { color: text, fontWeight: "900", fontSize: 16 },
+    meta: { color: muted, marginTop: 6 },
+
+    divider: {
+      height: 1,
+      backgroundColor: border,
+      marginVertical: 12,
+    },
+
+    formTitle: { color: text, fontWeight: "900" },
+    label: { color: muted, marginTop: 10, marginBottom: 6 },
+    input: {
+      borderWidth: 1,
+      borderColor: border,
+      borderRadius: 12,
+      paddingHorizontal: 12,
+      paddingVertical: 10,
+      color: text,
+      backgroundColor: "rgba(0,0,0,0.10)",
+    },
+
+    row: { flexDirection: "row", gap: 10 },
+
+    btnPrimary: {
+      padding: 10,
+      borderRadius: 999,
+      alignItems: "center",
+      backgroundColor: "rgba(16,185,129,0.25)",
+      borderWidth: 1,
+      borderColor: "rgba(16,185,129,0.5)",
+    },
+    btnDanger: {
+      padding: 10,
+      borderRadius: 999,
+      alignItems: "center",
+      backgroundColor: "rgba(239,68,68,0.25)",
+      borderWidth: 1,
+      borderColor: "rgba(239,68,68,0.5)",
+    },
+    btnGhost: {
+      padding: 10,
+      borderRadius: 999,
+      alignItems: "center",
+      borderWidth: 1,
+      borderColor: border,
+      backgroundColor: "rgba(255,255,255,0.12)",
+    },
+    btnText: { color: text, fontWeight: "900" },
+
+    // chips
+    chipsRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+    chip: {
+      paddingVertical: 8,
+      paddingHorizontal: 12,
+      borderRadius: 999,
+      borderWidth: 1,
+      borderColor: border,
+      backgroundColor: "rgba(255,255,255,0.12)",
+    },
+    chipActive: {
+      borderColor: "rgba(255,255,255,0.45)",
+      backgroundColor: "rgba(255,255,255,0.20)",
+    },
+    chipText: { color: text, fontWeight: "800", textTransform: "capitalize" },
+
+    // modal
+    modalWrap: {
+      position: "absolute",
+      left: 0,
+      right: 0,
+      top: 0,
+      bottom: 0,
+      backgroundColor: "rgba(0,0,0,0.35)",
+      justifyContent: "center",
+      alignItems: "center",
+      padding: 16,
+    },
+    modal: {
+      width: "100%",
+      maxWidth: 680,
+      backgroundColor: "rgba(255,255,255,0.16)",
+      borderRadius: 18,
+      borderWidth: 1,
+      borderColor: border,
+      padding: 14,
+    },
+    modalTitle: { color: text, fontWeight: "900", fontSize: 16, marginBottom: 6 },
+  });
+}

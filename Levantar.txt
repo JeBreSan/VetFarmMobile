@@ -8,4 +8,7 @@ npx expo start
 ------------------------------------------------
 https://vetfarmmobile.onrender.com/health
 -------------------------------------------------
-
+Validar paso a paso 
+Dashboard administrativo
+Mensaje Nativo 
+---------------------------
