@@ -17,11 +17,11 @@ export function Toast({ visible, text, type = "info", durationMs = 2400, onHide 
   const anim = useRef(new Animated.Value(0)).current;
 
   const bgColor = useMemo(() => {
-    // ✅ totalmente opaco (1.0)
-    if (type === "error") return "rgba(185,28,28,1)";
-    if (type === "success") return "rgba(21,128,61,1)";
-    return theme.isDark ? "rgba(17,24,39,1)" : "rgba(255,255,255,0.70)";
-  }, [type, theme.isDark]);
+  if (type === "error") return "#B91C1C";      // rojo sólido
+  if (type === "success") return "#15803D";   // verde sólido
+  return "#1F2937";                           // gris oscuro sólido
+}, [type]);
+
 
   useEffect(() => {
     if (!visible) return;
@@ -82,12 +82,19 @@ const styles = StyleSheet.create({
     elevation: 9999,
   },
   toast: {
-    width: "100%",
-    maxWidth: 520,
-    borderRadius: 16,
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-  },
+  width: "100%",
+  maxWidth: 520,
+  borderRadius: 16,
+  paddingVertical: 14,
+  paddingHorizontal: 18,
+
+  shadowColor: "#000",
+  shadowOpacity: 0.35,
+  shadowRadius: 14,
+  shadowOffset: { width: 0, height: 8 },
+  elevation: 10,
+},
+
   text: {
     color: "#FFF",
     fontSize: 14,
