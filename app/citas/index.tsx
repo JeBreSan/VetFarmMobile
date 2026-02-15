@@ -19,24 +19,9 @@ export default function CitasIndex() {
       </View>
 
       <View style={styles.box}>
-        <Button
-          title="Agendar cita"
-          onPress={() => router.push("/citas/crear" as any)}
-          style={styles.btn}
-        />
-
-        <Button
-          title="Próximas citas"
-          onPress={() => router.push("/citas/proximas" as any)}
-          style={styles.btn}
-        />
-
-        <Button
-          title="Volver"
-          variant="ghost"
-          onPress={() => router.back()}
-          style={[styles.btn, { marginTop: 8 }]}
-        />
+        <Button title="Agendar cita" variant="secondary" onPress={() => router.push("/citas/crear" as any)} style={styles.btn} />
+        <Button title="Próximas citas" variant="secondary" onPress={() => router.push("/citas/proximas" as any)} style={styles.btn} />
+        <Button title="Volver" variant="ghost" onPress={() => router.back()} style={[styles.btn, { marginTop: 8 }]} />
       </View>
     </LinearGradient>
   );

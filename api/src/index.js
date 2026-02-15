@@ -6,9 +6,13 @@ import express from "express";
 
 import { pool } from "./config/db.js";
 import { requireUser } from "./middlewares/requireUser.js";
+
 import authRoutes from "./routes/auth.routes.js";
 import mascotasRoutes from "./routes/mascotas.js";
 import perfilRoutes from "./routes/perfil.routes.js";
+
+import agendaRoutes from "./routes/agenda.js";
+import citasRoutes from "./routes/citas.js";
 
 const app = express();
 
@@ -16,12 +20,12 @@ app.use(cors());
 app.use(express.json());
 
 // ✅ NO TOCAR
-app.get("/", (req, res) => {
+app.get("/", (_req, res) => {
   res.json({ mensaje: "API VetFarm funcionando correctamente" });
 });
 
 // 🔎 Health check (prueba de conexión a Supabase)
-app.get("/health", async (req, res) => {
+app.get("/health", async (_req, res) => {
   try {
     const r = await pool.query("select now() as now");
     res.json({ ok: true, dbTime: r.rows[0].now });
@@ -29,20 +33,19 @@ app.get("/health", async (req, res) => {
     res.status(500).json({ ok: false, error: String(e) });
   }
 });
-app.get("/version", (_req, res) => {
-  res.json({ version: "mascotas-1" });
-});
 
 // 🧪 Diagnóstico de versión (para validar deploy)
-app.get("/version", (req, res) => {
-  res.json({ version: "mascotas-v1" });
+app.get("/version", (_req, res) => {
+  res.json({ version: "citas-agenda-1" });
 });
 
 app.use("/auth", authRoutes);
 app.use("/perfil", perfilRoutes);
 
-// ✅ MASCOTAS (protegido)
+// ✅ PROTEGIDAS
 app.use("/mascotas", requireUser, mascotasRoutes);
+app.use("/agenda", requireUser, agendaRoutes);
+app.use("/citas", requireUser, citasRoutes);
 
 const PORT = process.env.PORT || 3000;
 
