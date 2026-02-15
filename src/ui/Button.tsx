@@ -1,19 +1,22 @@
 import { LinearGradient } from "expo-linear-gradient";
-import React, { useMemo, useRef } from "react";
+import React, { PropsWithChildren, useMemo, useRef } from "react";
 import { Animated, Platform, Pressable, StyleSheet, Text, ViewStyle } from "react-native";
 import { useAppTheme } from "../theme/ThemeProvider";
 
-type Props = {
-  title: string;
+type Props = PropsWithChildren<{
+  title?: string; // ✅ ahora opcional
   onPress: () => void;
   disabled?: boolean;
   variant?: "primary" | "secondary" | "ghost";
-  style?: ViewStyle;
-};
+  style?: ViewStyle | ViewStyle[];
+}>;
 
-export function Button({ title, onPress, disabled, variant = "primary", style }: Props) {
+export function Button({ title, children, onPress, disabled, variant = "primary", style }: Props) {
   const { theme } = useAppTheme();
   const scale = useRef(new Animated.Value(1)).current;
+
+  // ✅ si viene children, úsalo. Si no, usa title.
+  const label = (typeof children === "string" ? children : title) ?? "";
 
   const commonShadow = useMemo(
     () => ({
@@ -65,7 +68,7 @@ export function Button({ title, onPress, disabled, variant = "primary", style }:
             },
           ]}
         >
-          <Text style={[styles.text, { color: theme.colors.text }]}>{title}</Text>
+          <Text style={[styles.text, { color: theme.colors.text }]}>{label}</Text>
         </Pressable>
       </Animated.View>
     );
@@ -91,7 +94,7 @@ export function Button({ title, onPress, disabled, variant = "primary", style }:
             },
           ]}
         >
-          <Text style={[styles.text, { color: theme.colors.primary }]}>{title}</Text>
+          <Text style={[styles.text, { color: theme.colors.primary }]}>{label}</Text>
         </Pressable>
       </Animated.View>
     );
@@ -120,7 +123,7 @@ export function Button({ title, onPress, disabled, variant = "primary", style }:
           end={{ x: 1, y: 1 }}
           style={styles.primary}
         >
-          <Text style={[styles.text, { color: "#FFF" }]}>{title}</Text>
+          <Text style={[styles.text, { color: "#FFF" }]}>{label}</Text>
         </LinearGradient>
       </Pressable>
     </Animated.View>

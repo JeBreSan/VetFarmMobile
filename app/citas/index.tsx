@@ -1,18 +1,47 @@
-import React from "react";
+import { LinearGradient } from "expo-linear-gradient";
+import { useRouter } from "expo-router";
+import React, { useMemo } from "react";
 import { StyleSheet, Text, View } from "react-native";
 
-export default function Citas() {
+import { Button } from "../../src/ui/Button";
+import { useAppTheme } from "../../src/theme/ThemeProvider";
+
+export default function CitasIndex() {
+  const router = useRouter();
+  const { theme } = useAppTheme();
+  const styles = useMemo(() => createStyles(theme), [theme]);
+
   return (
-    <View style={styles.screen}>
-      <Text style={styles.title}>Mis Citas</Text>
-      <Text style={styles.text}>Aquí va calendario + agendar + historial.</Text>
-      <Text style={styles.text}>Solo futuro para usuario ✅</Text>
-    </View>
+    <LinearGradient colors={theme.gradients.brand as any} style={styles.screen}>
+      <View style={styles.header}>
+        <Text style={styles.title}>Citas</Text>
+        <Text style={styles.subtitle}>Elegí qué querés hacer:</Text>
+      </View>
+
+      <View style={styles.box}>
+        <Button title="Agendar cita" onPress={() => router.push("/citas/crear" as any)} style={styles.btn} />
+        <Button title="Citas pendientes" variant="secondary" onPress={() => router.push("/citas/pendientes" as any)} style={styles.btn} />
+        <Button title="Historial" variant="secondary" onPress={() => router.push("/citas/historial" as any)} style={styles.btn} />
+        <Button title="Volver" variant="ghost" onPress={() => router.back()} style={[styles.btn, { marginTop: 8 }]} />
+      </View>
+    </LinearGradient>
   );
 }
 
-const styles = StyleSheet.create({
-  screen: { flex: 1, padding: 16, backgroundColor: "#0B1220" },
-  title: { color: "#fff", fontSize: 22, fontWeight: "800", marginBottom: 8 },
-  text: { color: "rgba(255,255,255,0.8)", marginTop: 6 },
-});
+function createStyles(theme: any) {
+  return StyleSheet.create({
+    screen: { flex: 1, padding: 16 },
+    header: { marginTop: 10, marginBottom: 14 },
+    title: { color: "#fff", fontSize: 26, fontWeight: "900" },
+    subtitle: { color: "rgba(255,255,255,0.9)", marginTop: 6 },
+    box: {
+      backgroundColor: "rgba(255,255,255,0.12)",
+      borderWidth: 1,
+      borderColor: "rgba(255,255,255,0.18)",
+      borderRadius: 18,
+      padding: 14,
+      gap: 10,
+    },
+    btn: { marginTop: 6 },
+  });
+}

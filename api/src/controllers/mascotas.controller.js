@@ -1,16 +1,11 @@
 import { pool } from "../config/db.js";
 
-// Helpers
-function getUser(req) {
-  const id = Number(req.user?.id);
-  const rol = String(req.user?.rol ?? "").toLowerCase();
-  return { id, rol };
-}
+const ESPECIES_VALIDAS = ["perro", "gato", "ave", "roedor", "reptil", "otro"];
 
 // GET /mascotas
 export const listarMascotas = async (req, res) => {
   try {
-    const { id: userId } = getUser(req);
+    const userId = Number(req.user?.id);
 
     const r = await pool.query(
       `SELECT id, nombre, especie, raza, edad, propietario_id, created_at, updated_at, activo
@@ -30,7 +25,7 @@ export const listarMascotas = async (req, res) => {
 // POST /mascotas
 export const crearMascota = async (req, res) => {
   try {
-    const { id: userId } = getUser(req);
+    const userId = Number(req.user?.id);
     const { nombre, especie, raza, edad } = req.body;
 
     if (!nombre?.trim() || !especie?.trim()) {
@@ -39,15 +34,22 @@ export const crearMascota = async (req, res) => {
       });
     }
 
+    const especieNorm = String(especie).trim().toLowerCase();
+    if (!ESPECIES_VALIDAS.includes(especieNorm)) {
+      return res.status(400).json({
+        mensaje: `Especie inválida. Use: ${ESPECIES_VALIDAS.join(", ")}`,
+      });
+    }
+
     const r = await pool.query(
       `INSERT INTO mascotas (nombre, especie, raza, edad, propietario_id, activo)
        VALUES ($1,$2,$3,$4,$5,true)
        RETURNING id, nombre, especie, raza, edad, propietario_id, created_at, updated_at, activo`,
       [
-        nombre.trim(),
-        String(especie).trim().toLowerCase(),
-        raza?.trim() ? raza.trim() : null,
-        edad?.trim() ? edad.trim() : null,
+        String(nombre).trim(),
+        especieNorm,
+        raza?.trim() ? String(raza).trim() : null,
+        edad?.trim() ? String(edad).trim() : null,
         userId,
       ]
     );
@@ -62,7 +64,8 @@ export const crearMascota = async (req, res) => {
 // PUT /mascotas/:id
 export const actualizarMascota = async (req, res) => {
   try {
-    const { id: userId, rol } = getUser(req);
+    const userId = Number(req.user?.id);
+    const rol = String(req.user?.rol || "usuario");
     const mascotaId = Number(req.params.id);
 
     if (!Number.isFinite(mascotaId) || mascotaId <= 0) {
@@ -74,40 +77,29 @@ export const actualizarMascota = async (req, res) => {
       [mascotaId]
     );
 
-    if (existe.rows.length === 0) {
+    if (existe.rows.length === 0 || !existe.rows[0].activo) {
       return res.status(404).json({ mensaje: "Mascota no encontrada." });
     }
 
-    const m = existe.rows[0];
-    const ownerId = Number(m.propietario_id); // 👈 CLAVE
-
-    if (!m.activo) {
-      return res.status(404).json({ mensaje: "Mascota no encontrada." });
-    }
+    const ownerId = Number(existe.rows[0].propietario_id);
 
     // Permisos: admin o dueño
     if (rol !== "admin" && ownerId !== userId) {
-      // Debug útil (dejalo por ahora para confirmar en logs de Render)
-      console.log("403 perms", { userId, ownerId, rol, mascotaId });
       return res.status(403).json({ mensaje: "Prohibido." });
     }
 
     const { nombre, edad, especie, raza } = req.body;
 
-    // Usuario NO puede cambiar especie/raza
-    if (rol !== "admin") {
-      if (typeof especie !== "undefined" || typeof raza !== "undefined") {
-        return res.status(403).json({
-          mensaje: "Prohibido. No puede cambiar especie/raza.",
-        });
-      }
+    // ✅ Usuario: NO puede cambiar especie. (PERO SÍ puede cambiar raza/nombre/edad)
+    if (rol !== "admin" && typeof especie !== "undefined") {
+      return res.status(403).json({ mensaje: "Prohibido. No puede cambiar la especie." });
     }
 
-    // Construir update dinámico
     const fields = [];
     const values = [];
     let idx = 1;
 
+    // nombre
     if (typeof nombre !== "undefined") {
       const n = String(nombre).trim();
       if (!n) return res.status(400).json({ mensaje: "Nombre inválido." });
@@ -115,25 +107,30 @@ export const actualizarMascota = async (req, res) => {
       values.push(n);
     }
 
+    // raza (editable por usuario y admin)
+    if (typeof raza !== "undefined") {
+      const rza = String(raza).trim();
+      fields.push(`raza = $${idx++}`);
+      values.push(rza ? rza : null);
+    }
+
+    // edad
     if (typeof edad !== "undefined") {
       const e = String(edad).trim();
       fields.push(`edad = $${idx++}`);
       values.push(e ? e : null);
     }
 
-    if (rol === "admin") {
-      if (typeof especie !== "undefined") {
-        const s = String(especie).trim().toLowerCase();
-        if (!s) return res.status(400).json({ mensaje: "Especie inválida." });
-        fields.push(`especie = $${idx++}`);
-        values.push(s);
+    // especie (solo admin)
+    if (rol === "admin" && typeof especie !== "undefined") {
+      const s = String(especie).trim().toLowerCase();
+      if (!ESPECIES_VALIDAS.includes(s)) {
+        return res.status(400).json({
+          mensaje: `Especie inválida. Use: ${ESPECIES_VALIDAS.join(", ")}`,
+        });
       }
-
-      if (typeof raza !== "undefined") {
-        const rza = String(raza).trim();
-        fields.push(`raza = $${idx++}`);
-        values.push(rza ? rza : null);
-      }
+      fields.push(`especie = $${idx++}`);
+      values.push(s);
     }
 
     if (fields.length === 0) {
@@ -161,7 +158,8 @@ export const actualizarMascota = async (req, res) => {
 // DELETE /mascotas/:id (soft delete)
 export const eliminarMascota = async (req, res) => {
   try {
-    const { id: userId, rol } = getUser(req);
+    const userId = Number(req.user?.id);
+    const rol = String(req.user?.rol || "usuario");
     const mascotaId = Number(req.params.id);
 
     if (!Number.isFinite(mascotaId) || mascotaId <= 0) {
@@ -173,19 +171,13 @@ export const eliminarMascota = async (req, res) => {
       [mascotaId]
     );
 
-    if (existe.rows.length === 0) {
+    if (existe.rows.length === 0 || !existe.rows[0].activo) {
       return res.status(404).json({ mensaje: "Mascota no encontrada." });
     }
 
-    const m = existe.rows[0];
-    const ownerId = Number(m.propietario_id); // 👈 CLAVE
-
-    if (!m.activo) {
-      return res.status(404).json({ mensaje: "Mascota no encontrada." });
-    }
+    const ownerId = Number(existe.rows[0].propietario_id);
 
     if (rol !== "admin" && ownerId !== userId) {
-      console.log("403 delete perms", { userId, ownerId, rol, mascotaId });
       return res.status(403).json({ mensaje: "Prohibido." });
     }
 

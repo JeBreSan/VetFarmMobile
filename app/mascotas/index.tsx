@@ -3,8 +3,8 @@ import { useRouter } from "expo-router";
 import React, { useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
   FlatList,
+  Modal,
   Pressable,
   StyleSheet,
   Text,
@@ -23,6 +23,9 @@ import {
 import { getSessionUser } from "../../src/storage/session";
 import { useAppTheme } from "../../src/theme/ThemeProvider";
 
+import { ConfirmDialog } from "../../src/ui/ConfirmDialog";
+import { Toast } from "../../src/ui/Toast";
+
 type Especie = "perro" | "gato" | "ave" | "roedor" | "reptil" | "otro";
 const ESPECIES: Especie[] = ["perro", "gato", "ave", "roedor", "reptil", "otro"];
 
@@ -30,11 +33,14 @@ export default function MascotasScreen() {
   const router = useRouter();
   const { theme } = useAppTheme();
 
-  // ✅ IMPORTANTE: el gradiente NO va en StyleSheet.create (rompe Web)
-  const gradient = (((theme as any)?.colors?.gradient) ?? ["#6D28D9", "#2563EB", "#10B981"]) as any;
-
+  // ✅ el gradiente NO va en StyleSheet.create (rompe Web)
+  const gradient =
+    (((theme as any)?.colors?.gradient) ?? ["#6D28D9", "#2563EB", "#10B981"]) as any;
 
   const styles = useMemo(() => createStyles(theme), [theme]);
+
+  // ✅ placeholder fuera de StyleSheet (para que NO rompa en web)
+  const placeholderColor = "rgba(255,255,255,0.78)";
 
   const [usuarioNombre, setUsuarioNombre] = useState<string>("");
 
@@ -42,21 +48,45 @@ export default function MascotasScreen() {
   const [mascotas, setMascotas] = useState<Mascota[]>([]);
   const [selected, setSelected] = useState<Mascota | null>(null);
 
-  // paneles
-  const [showFicha, setShowFicha] = useState(false);
-  const [showCitas, setShowCitas] = useState(false);
-
-  // crear
+  // Modal Nueva
   const [showCrear, setShowCrear] = useState(false);
   const [cNombre, setCNombre] = useState("");
   const [cEspecie, setCEspecie] = useState<Especie>("perro");
   const [cRaza, setCRaza] = useState("");
   const [cEdad, setCEdad] = useState("");
 
-  // editar
+  // Modal Ficha (Editar)
+  const [showFicha, setShowFicha] = useState(false);
   const [eNombre, setENombre] = useState("");
   const [eRaza, setERaza] = useState("");
   const [eEdad, setEEdad] = useState("");
+
+  // Toast
+  const [toast, setToast] = useState<{
+    visible: boolean;
+    text: string;
+    type: "success" | "error" | "info";
+  }>({ visible: false, text: "", type: "info" });
+
+  const toastOk = (text: string) => setToast({ visible: true, text, type: "success" });
+  const toastErr = (text: string) => setToast({ visible: true, text, type: "error" });
+
+  // ConfirmDialog
+  const [confirm, setConfirm] = useState<{
+    visible: boolean;
+    title: string;
+    message: string;
+    confirmText: string;
+    cancelText: string;
+    onConfirm: null | (() => Promise<void> | void);
+  }>({
+    visible: false,
+    title: "",
+    message: "",
+    confirmText: "Confirmar",
+    cancelText: "Cancelar",
+    onConfirm: null,
+  });
 
   async function cargar() {
     try {
@@ -66,8 +96,14 @@ export default function MascotasScreen() {
 
       const data = await apiListarMascotas();
       setMascotas(data);
+
+      // si la seleccionada ya no existe, limpiar
+      if (selected) {
+        const still = data.some((m) => m.id === selected.id);
+        if (!still) setSelected(null);
+      }
     } catch (e: any) {
-      Alert.alert("Error", e?.message ?? "No se pudo cargar mascotas");
+      toastErr(e?.message ?? "No se pudo cargar mascotas");
     } finally {
       setLoading(false);
     }
@@ -75,29 +111,14 @@ export default function MascotasScreen() {
 
   useEffect(() => {
     cargar();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   function seleccionarMascota(m: Mascota) {
-    // al tocar otra, ocultamos paneles (como pediste)
     setSelected(m);
-    setShowFicha(false);
-    setShowCitas(false);
-
-    // precargar inputs de edición
     setENombre(m.nombre);
     setERaza(m.raza ?? "");
     setEEdad(m.edad ?? "");
-  }
-
-  function cerrarPaneles() {
-    setShowFicha(false);
-    setShowCitas(false);
-  }
-
-  function abrirFicha() {
-    if (!selected) return;
-    setShowFicha(true);
-    setShowCitas(true);
   }
 
   function abrirNueva() {
@@ -108,15 +129,17 @@ export default function MascotasScreen() {
     setCEdad("");
   }
 
+  function abrirFicha() {
+    if (!selected) return;
+    setENombre(selected.nombre);
+    setERaza(selected.raza ?? "");
+    setEEdad(selected.edad ?? "");
+    setShowFicha(true);
+  }
+
   async function crearMascota() {
-    if (!cNombre.trim()) {
-      Alert.alert("Validación", "El nombre es requerido");
-      return;
-    }
-    if (!cEspecie) {
-      Alert.alert("Validación", "La especie es requerida");
-      return;
-    }
+    if (!cNombre.trim()) return toastErr("Validación: el nombre es requerido.");
+    if (!cEspecie) return toastErr("Validación: la especie es requerida.");
 
     try {
       setLoading(true);
@@ -128,9 +151,10 @@ export default function MascotasScreen() {
       });
 
       setShowCrear(false);
+      toastOk("Mascota creada correctamente.");
       await cargar();
     } catch (e: any) {
-      Alert.alert("Error", e?.message ?? "No se pudo crear");
+      toastErr(e?.message ?? "No se pudo crear");
     } finally {
       setLoading(false);
     }
@@ -138,52 +162,53 @@ export default function MascotasScreen() {
 
   async function guardarEdicion() {
     if (!selected) return;
-
-    if (!eNombre.trim()) {
-      Alert.alert("Validación", "El nombre no puede estar vacío");
-      return;
-    }
+    if (!eNombre.trim()) return toastErr("Validación: el nombre no puede estar vacío.");
 
     try {
       setLoading(true);
+
+      // ✅ NO enviamos especie nunca
       const updated = await apiActualizarMascota(selected.id, {
         nombre: eNombre.trim(),
-        raza: eRaza.trim(),
-        edad: eEdad.trim(),
+        raza: eRaza.trim() ? eRaza.trim() : undefined,
+        edad: eEdad.trim() ? eEdad.trim() : undefined,
       });
 
       setSelected(updated);
+      toastOk("Cambios guardados.");
       await cargar();
     } catch (e: any) {
-      Alert.alert("Error", e?.message ?? "No se pudo actualizar");
+      toastErr(e?.message ?? "No se pudo actualizar");
     } finally {
       setLoading(false);
     }
   }
 
-  async function eliminarMascota() {
+  function eliminarMascota() {
     if (!selected) return;
 
-    Alert.alert("Eliminar mascota", `¿Desea eliminar a "${selected.nombre}"?`, [
-      { text: "Cancelar", style: "cancel" },
-      {
-        text: "Eliminar",
-        style: "destructive",
-        onPress: async () => {
-          try {
-            setLoading(true);
-            await apiEliminarMascota(selected.id);
-            setSelected(null);
-            cerrarPaneles();
-            await cargar();
-          } catch (e: any) {
-            Alert.alert("Error", e?.message ?? "No se pudo eliminar");
-          } finally {
-            setLoading(false);
-          }
-        },
+    setConfirm({
+      visible: true,
+      title: "Eliminar mascota",
+      message: `¿Desea eliminar a "${selected.nombre}"?`,
+      confirmText: "Sí, eliminar",
+      cancelText: "Cancelar",
+      onConfirm: async () => {
+        setConfirm((p) => ({ ...p, visible: false }));
+        try {
+          setLoading(true);
+          await apiEliminarMascota(selected.id);
+          setSelected(null);
+          setShowFicha(false);
+          toastOk("Mascota eliminada.");
+          await cargar();
+        } catch (e: any) {
+          toastErr(e?.message ?? "No se pudo eliminar");
+        } finally {
+          setLoading(false);
+        }
       },
-    ]);
+    });
   }
 
   return (
@@ -197,9 +222,7 @@ export default function MascotasScreen() {
       <View style={styles.header}>
         <View>
           <Text style={styles.title}>Mascotas de {usuarioNombre || "Usuario"}</Text>
-          <Text style={styles.subtitle}>
-            Seleccioná una mascota (la ficha se abre con “Ver ficha”).
-          </Text>
+          <Text style={styles.subtitle}>Seleccioná una mascota y tocá “Ver ficha”.</Text>
         </View>
 
         <View style={styles.headerBtns}>
@@ -215,135 +238,45 @@ export default function MascotasScreen() {
 
       {loading && <ActivityIndicator style={{ marginVertical: 10 }} />}
 
-      {/* Layout 3 columnas */}
-      <View style={styles.grid}>
-        {/* Col 1: lista */}
-        <View style={styles.colLeft}>
-          <Text style={styles.sectionTitle}>Mis mascotas</Text>
+      {/* Lista + botón ver ficha */}
+      <View style={styles.card}>
+        <Text style={styles.sectionTitle}>Mis mascotas</Text>
 
-          <View style={styles.card}>
-            <FlatList
-              data={mascotas}
-              keyExtractor={(m) => String(m.id)}
-              renderItem={({ item }) => {
-                const active = selected?.id === item.id;
-                return (
-                  <Pressable
-                    onPress={() => seleccionarMascota(item)}
-                    style={[styles.listItem, active ? styles.listItemActive : null]}
-                  >
-                    <Text style={styles.listTitle}>{item.nombre}</Text>
-                    <Text style={styles.listMeta}>
-                      {item.especie} • {item.edad ? `${item.edad} años` : "—"}
-                    </Text>
-                  </Pressable>
-                );
-              }}
-              ListEmptyComponent={
-                !loading ? <Text style={styles.empty}>Aún no tenés mascotas registradas.</Text> : null
-              }
-            />
-          </View>
+        <FlatList
+          data={mascotas}
+          keyExtractor={(m) => String(m.id)}
+          renderItem={({ item }) => {
+            const active = selected?.id === item.id;
+            return (
+              <Pressable
+                onPress={() => seleccionarMascota(item)}
+                style={[styles.listItem, active ? styles.listItemActive : null]}
+              >
+                <Text style={styles.listTitle}>{item.nombre}</Text>
+                <Text style={styles.listMeta}>
+                  {item.especie} • {item.edad ? `${item.edad} años` : "—"}
+                </Text>
+              </Pressable>
+            );
+          }}
+          ListEmptyComponent={
+            !loading ? <Text style={styles.empty}>Aún no tenés mascotas registradas.</Text> : null
+          }
+        />
 
-          <View style={styles.row}>
-            <Pressable
-              style={[styles.btnGhost, { flex: 1, opacity: selected ? 1 : 0.45 }]}
-              onPress={abrirFicha}
-              disabled={!selected}
-            >
-              <Text style={styles.btnText}>Ver ficha</Text>
-            </Pressable>
-
-            <Pressable style={[styles.btnGhost, { flex: 1 }]} onPress={cerrarPaneles}>
-              <Text style={styles.btnText}>Cerrar</Text>
-            </Pressable>
-          </View>
-        </View>
-
-        {/* Col 2: ficha */}
-        <View style={styles.colMid}>
-          <Text style={styles.sectionTitle}>Ficha</Text>
-
-          {!showFicha ? (
-            <View style={styles.placeholderCard}>
-              <Text style={styles.placeholderText}>
-                Seleccioná una mascota y presioná “Ver ficha”.
-              </Text>
-            </View>
-          ) : (
-            <View style={styles.card}>
-              <Text style={styles.cardTitle}>{selected?.nombre}</Text>
-
-              <Text style={styles.meta}>Especie: {selected?.especie}</Text>
-              <Text style={styles.meta}>Raza: {selected?.raza ?? "—"}</Text>
-              <Text style={styles.meta}>Edad: {selected?.edad ?? "—"}</Text>
-
-              <View style={styles.divider} />
-
-              <Text style={styles.formTitle}>Editar</Text>
-
-              <Text style={styles.label}>Nombre</Text>
-              <TextInput
-                value={eNombre}
-                onChangeText={setENombre}
-                style={styles.input}
-                placeholder="Nombre"
-                placeholderTextColor="rgba(255,255,255,0.75)"
-              />
-
-              <Text style={styles.label}>Raza</Text>
-              <TextInput
-                value={eRaza}
-                onChangeText={setERaza}
-                style={styles.input}
-                placeholder="Raza"
-                placeholderTextColor="rgba(255,255,255,0.75)"
-              />
-
-              <Text style={styles.label}>Edad</Text>
-              <TextInput
-                value={eEdad}
-                onChangeText={setEEdad}
-                style={styles.input}
-                placeholder="Edad"
-                placeholderTextColor="rgba(255,255,255,0.75)"
-                keyboardType="numeric"
-              />
-
-              <View style={styles.row}>
-                <Pressable style={[styles.btnPrimary, { flex: 1 }]} onPress={guardarEdicion}>
-                  <Text style={styles.btnText}>Guardar</Text>
-                </Pressable>
-
-                <Pressable style={[styles.btnDanger, { flex: 1 }]} onPress={eliminarMascota}>
-                  <Text style={styles.btnText}>Eliminar</Text>
-                </Pressable>
-              </View>
-            </View>
-          )}
-        </View>
-
-        {/* Col 3: citas (placeholder) */}
-        <View style={styles.colRight}>
-          <Text style={styles.sectionTitle}>Citas</Text>
-
-          {!showCitas ? (
-            <View style={styles.placeholderCard}>
-              <Text style={styles.placeholderText}>
-                Seleccioná una mascota y abrí la ficha para ver sus citas.
-              </Text>
-            </View>
-          ) : (
-            <View style={styles.card}>
-              <Text style={styles.cardTitle}>Historial de citas</Text>
-              <Text style={styles.meta}>(Placeholder) Aquí luego listamos citas de: {selected?.nombre}</Text>
-            </View>
-          )}
+        <View style={styles.row}>
+          <Pressable
+            style={[styles.btnGhost, { flex: 1, opacity: selected ? 1 : 0.45 }]}
+            onPress={abrirFicha}
+            disabled={!selected}
+          >
+            <Text style={styles.btnText}>Ver ficha</Text>
+          </Pressable>
         </View>
       </View>
 
-      {/* Modal Crear */}
-      {showCrear && (
+      {/* MODAL: NUEVA */}
+      <Modal visible={showCrear} transparent animationType="fade" onRequestClose={() => setShowCrear(false)}>
         <View style={styles.modalWrap}>
           <View style={styles.modal}>
             <Text style={styles.modalTitle}>Nueva mascota</Text>
@@ -354,7 +287,7 @@ export default function MascotasScreen() {
               onChangeText={setCNombre}
               style={styles.input}
               placeholder="Ej: Gordo"
-              placeholderTextColor="rgba(255,255,255,0.75)"
+              placeholderTextColor={placeholderColor}
             />
 
             <Text style={styles.label}>Especie *</Text>
@@ -380,8 +313,8 @@ export default function MascotasScreen() {
                   value={cEdad}
                   onChangeText={setCEdad}
                   style={styles.input}
-                  placeholder="Ej: 14"
-                  placeholderTextColor="rgba(255,255,255,0.75)"
+                  placeholder="Ej: 2"
+                  placeholderTextColor={placeholderColor}
                   keyboardType="numeric"
                 />
               </View>
@@ -393,33 +326,113 @@ export default function MascotasScreen() {
                   onChangeText={setCRaza}
                   style={styles.input}
                   placeholder="Ej: criollo"
-                  placeholderTextColor="rgba(255,255,255,0.75)"
+                  placeholderTextColor={placeholderColor}
                 />
               </View>
             </View>
 
             <View style={styles.row}>
-              <Pressable style={[styles.btnGhost, { flex: 1 }]} onPress={() => setShowCrear(false)}>
+              <Pressable style={[styles.btnGhost, { flex: 1 }]} onPress={() => setShowCrear(false)} disabled={loading}>
                 <Text style={styles.btnText}>Cancelar</Text>
               </Pressable>
 
-              <Pressable style={[styles.btnPrimary, { flex: 1 }]} onPress={crearMascota}>
+              <Pressable style={[styles.btnPrimary, { flex: 1 }]} onPress={crearMascota} disabled={loading}>
                 <Text style={styles.btnText}>Crear</Text>
               </Pressable>
             </View>
           </View>
         </View>
-      )}
+      </Modal>
+
+      {/* MODAL: FICHA */}
+      <Modal visible={showFicha} transparent animationType="fade" onRequestClose={() => setShowFicha(false)}>
+        <View style={styles.modalWrap}>
+          <View style={styles.modal}>
+            <Text style={styles.modalTitle}>{selected?.nombre ?? "Ficha"}</Text>
+
+            <Text style={styles.meta}>Especie: {selected?.especie}</Text>
+            <Text style={styles.meta}>Raza: {selected?.raza ?? "—"}</Text>
+            <Text style={styles.meta}>Edad: {selected?.edad ?? "—"}</Text>
+
+            <View style={styles.divider} />
+
+            <Text style={styles.formTitle}>Editar</Text>
+
+            <Text style={styles.label}>Nombre</Text>
+            <TextInput
+              value={eNombre}
+              onChangeText={setENombre}
+              style={styles.input}
+              placeholder="Nombre"
+              placeholderTextColor={placeholderColor}
+            />
+
+            <Text style={styles.label}>Raza</Text>
+            <TextInput
+              value={eRaza}
+              onChangeText={setERaza}
+              style={styles.input}
+              placeholder="Raza"
+              placeholderTextColor={placeholderColor}
+            />
+
+            <Text style={styles.label}>Edad</Text>
+            <TextInput
+              value={eEdad}
+              onChangeText={setEEdad}
+              style={styles.input}
+              placeholder="Edad"
+              placeholderTextColor={placeholderColor}
+              keyboardType="numeric"
+            />
+
+            <View style={styles.row}>
+              <Pressable style={[styles.btnGhost, { flex: 1 }]} onPress={() => setShowFicha(false)} disabled={loading}>
+                <Text style={styles.btnText}>Cerrar</Text>
+              </Pressable>
+
+              <Pressable style={[styles.btnPrimary, { flex: 1 }]} onPress={guardarEdicion} disabled={loading}>
+                <Text style={styles.btnText}>Guardar</Text>
+              </Pressable>
+            </View>
+
+            <View style={{ marginTop: 10 }}>
+              <Pressable style={styles.btnDanger} onPress={eliminarMascota} disabled={loading}>
+                <Text style={styles.btnText}>Eliminar</Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      <Toast
+        visible={toast.visible}
+        text={toast.text}
+        type={toast.type}
+        onHide={() => setToast((p) => ({ ...p, visible: false }))}
+      />
+
+      <ConfirmDialog
+        visible={confirm.visible}
+        title={confirm.title}
+        message={confirm.message}
+        confirmText={confirm.confirmText}
+        cancelText={confirm.cancelText}
+        onCancel={() => setConfirm((p) => ({ ...p, visible: false }))}
+        onConfirm={async () => {
+          if (confirm.onConfirm) await confirm.onConfirm();
+        }}
+      />
     </LinearGradient>
   );
 }
 
 function createStyles(theme: any) {
   const text = theme?.colors?.text ?? "#FFFFFF";
-  const muted = "rgba(255,255,255,0.75)";
-  const border = "rgba(255,255,255,0.18)";
+  const muted = "rgba(255,255,255,0.85)";
+  const border = "rgba(255,255,255,0.22)";
   const card = "rgba(255,255,255,0.14)";
-  const card2 = "rgba(255,255,255,0.18)";
+  const modalBg = "rgba(20, 22, 34, 0.92)";
 
   return StyleSheet.create({
     screen: { flex: 1, padding: 16 },
@@ -436,32 +449,16 @@ function createStyles(theme: any) {
 
     headerBtns: { flexDirection: "row", gap: 10 },
 
-    grid: { flex: 1, flexDirection: "row", gap: 14 },
-
-    colLeft: { width: 380, gap: 10 },
-    colMid: { flex: 1, gap: 10 },
-    colRight: { width: 340, gap: 10 },
-
-    sectionTitle: { color: text, fontWeight: "900", marginBottom: 4 },
+    sectionTitle: { color: text, fontWeight: "900", marginBottom: 10 },
 
     card: {
+      flex: 1,
       backgroundColor: card,
       borderRadius: 16,
       padding: 12,
       borderWidth: 1,
       borderColor: border,
     },
-
-    placeholderCard: {
-      backgroundColor: card2,
-      borderRadius: 16,
-      padding: 14,
-      borderWidth: 1,
-      borderColor: border,
-      minHeight: 86,
-      justifyContent: "center",
-    },
-    placeholderText: { color: muted },
 
     listItem: {
       paddingVertical: 10,
@@ -473,25 +470,21 @@ function createStyles(theme: any) {
       backgroundColor: "rgba(255,255,255,0.10)",
     },
     listItemActive: {
-      borderColor: "rgba(255,255,255,0.35)",
-      backgroundColor: "rgba(255,255,255,0.16)",
+      borderColor: "rgba(255,255,255,0.42)",
+      backgroundColor: "rgba(255,255,255,0.18)",
     },
     listTitle: { color: text, fontWeight: "900" },
     listMeta: { color: muted, marginTop: 4, fontSize: 12 },
 
     empty: { color: muted, paddingVertical: 10 },
 
-    cardTitle: { color: text, fontWeight: "900", fontSize: 16 },
     meta: { color: muted, marginTop: 6 },
 
-    divider: {
-      height: 1,
-      backgroundColor: border,
-      marginVertical: 12,
-    },
+    divider: { height: 1, backgroundColor: border, marginVertical: 12 },
 
     formTitle: { color: text, fontWeight: "900" },
     label: { color: muted, marginTop: 10, marginBottom: 6 },
+
     input: {
       borderWidth: 1,
       borderColor: border,
@@ -499,10 +492,10 @@ function createStyles(theme: any) {
       paddingHorizontal: 12,
       paddingVertical: 10,
       color: text,
-      backgroundColor: "rgba(0,0,0,0.10)",
+      backgroundColor: "rgba(0,0,0,0.18)",
     },
 
-    row: { flexDirection: "row", gap: 10 },
+    row: { flexDirection: "row", gap: 10, marginTop: 12 },
 
     btnPrimary: {
       padding: 10,
@@ -510,7 +503,7 @@ function createStyles(theme: any) {
       alignItems: "center",
       backgroundColor: "rgba(16,185,129,0.25)",
       borderWidth: 1,
-      borderColor: "rgba(16,185,129,0.5)",
+      borderColor: "rgba(16,185,129,0.55)",
     },
     btnDanger: {
       padding: 10,
@@ -518,7 +511,7 @@ function createStyles(theme: any) {
       alignItems: "center",
       backgroundColor: "rgba(239,68,68,0.25)",
       borderWidth: 1,
-      borderColor: "rgba(239,68,68,0.5)",
+      borderColor: "rgba(239,68,68,0.55)",
     },
     btnGhost: {
       padding: 10,
@@ -530,7 +523,6 @@ function createStyles(theme: any) {
     },
     btnText: { color: text, fontWeight: "900" },
 
-    // chips
     chipsRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
     chip: {
       paddingVertical: 8,
@@ -541,19 +533,14 @@ function createStyles(theme: any) {
       backgroundColor: "rgba(255,255,255,0.12)",
     },
     chipActive: {
-      borderColor: "rgba(255,255,255,0.45)",
+      borderColor: "rgba(255,255,255,0.50)",
       backgroundColor: "rgba(255,255,255,0.20)",
     },
     chipText: { color: text, fontWeight: "800", textTransform: "capitalize" },
 
-    // modal
     modalWrap: {
-      position: "absolute",
-      left: 0,
-      right: 0,
-      top: 0,
-      bottom: 0,
-      backgroundColor: "rgba(0,0,0,0.35)",
+      flex: 1,
+      backgroundColor: "rgba(0,0,0,0.55)",
       justifyContent: "center",
       alignItems: "center",
       padding: 16,
@@ -561,7 +548,7 @@ function createStyles(theme: any) {
     modal: {
       width: "100%",
       maxWidth: 680,
-      backgroundColor: "rgba(255,255,255,0.16)",
+      backgroundColor: modalBg,
       borderRadius: 18,
       borderWidth: 1,
       borderColor: border,

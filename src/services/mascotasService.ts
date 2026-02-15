@@ -28,11 +28,19 @@ async function authHeaders(): Promise<Record<string, string>> {
 async function parseError(r: Response) {
   try {
     const txt = await r.text();
-    return txt || `Error HTTP ${r.status}`;
+
+    // si viene JSON con {message: "..."} o {error: "..."}
+    try {
+      const j = JSON.parse(txt);
+      return j?.message || j?.error || txt || `Error HTTP ${r.status}`;
+    } catch {
+      return txt || `Error HTTP ${r.status}`;
+    }
   } catch {
     return `Error HTTP ${r.status}`;
   }
 }
+
 
 export async function apiListarMascotas(): Promise<Mascota[]> {
   const headers = await authHeaders();

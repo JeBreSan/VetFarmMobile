@@ -1,9 +1,9 @@
 import { Router } from "express";
 import {
-    actualizarMascota,
-    crearMascota,
-    eliminarMascota,
-    listarMascotas,
+  listarMascotas,
+  crearMascota,
+  actualizarMascota,
+  eliminarMascota,
 } from "../controllers/mascotas.controller.js";
 
 const router = Router();

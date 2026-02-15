@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef } from "react";
-import { Animated, Platform, StyleSheet, Text, View } from "react-native";
+import { Animated, StyleSheet, Text, View } from "react-native";
 import { useAppTheme } from "../theme/ThemeProvider";
 
 type ToastType = "success" | "error" | "info";
@@ -12,22 +12,15 @@ type Props = {
   onHide: () => void;
 };
 
-export function Toast({
-  visible,
-  text,
-  type = "info",
-  durationMs = 2400,
-  onHide,
-}: Props) {
+export function Toast({ visible, text, type = "info", durationMs = 2400, onHide }: Props) {
   const { theme } = useAppTheme();
   const anim = useRef(new Animated.Value(0)).current;
 
   const bgColor = useMemo(() => {
-    if (type === "error") return "rgba(239,68,68,0.95)";
-    if (type === "success") return "rgba(34,197,94,0.95)";
-    return theme.isDark
-      ? "rgba(17,24,39,0.95)"
-      : "rgba(31,41,55,0.95)";
+    // ✅ totalmente opaco (1.0)
+    if (type === "error") return "rgba(185,28,28,1)";
+    if (type === "success") return "rgba(21,128,61,1)";
+    return theme.isDark ? "rgba(17,24,39,1)" : "rgba(31,41,55,1)";
   }, [type, theme.isDark]);
 
   useEffect(() => {
@@ -35,14 +28,14 @@ export function Toast({
 
     Animated.timing(anim, {
       toValue: 1,
-      duration: 180,
+      duration: 160,
       useNativeDriver: true,
     }).start();
 
     const timer = setTimeout(() => {
       Animated.timing(anim, {
         toValue: 0,
-        duration: 180,
+        duration: 160,
         useNativeDriver: true,
       }).start(() => onHide());
     }, durationMs);
@@ -64,14 +57,11 @@ export function Toast({
               {
                 translateY: anim.interpolate({
                   inputRange: [0, 1],
-                  outputRange: [16, 0],
+                  outputRange: [18, 0],
                 }),
               },
             ],
           },
-          Platform.OS === "web"
-            ? ({ backdropFilter: "blur(10px)" } as any)
-            : null,
         ]}
       >
         <Text style={styles.text}>{text}</Text>
@@ -88,7 +78,8 @@ const styles = StyleSheet.create({
     right: 0,
     alignItems: "center",
     paddingHorizontal: 16,
-    zIndex: 999,
+    zIndex: 9999,
+    elevation: 9999,
   },
   toast: {
     width: "100%",
@@ -99,8 +90,8 @@ const styles = StyleSheet.create({
   },
   text: {
     color: "#FFF",
-    fontSize: 13,
-    fontWeight: "800",
+    fontSize: 14,
+    fontWeight: "900",
     textAlign: "center",
   },
 });
