@@ -6,7 +6,7 @@ import { StyleSheet, Text, View } from "react-native";
 import { useAppTheme } from "../../src/theme/ThemeProvider";
 import { Button } from "../../src/ui/Button";
 
-export default function CitasIndex() {
+export default function HistorialClinicoIndex() {
   const router = useRouter();
   const { theme } = useAppTheme();
   const styles = useMemo(() => createStyles(theme), [theme]);
@@ -14,29 +14,14 @@ export default function CitasIndex() {
   return (
     <LinearGradient colors={theme.gradients.brand as any} style={styles.screen}>
       <View style={styles.header}>
-        <Text style={styles.title}>Citas</Text>
-        <Text style={styles.subtitle}>Elegí qué querés hacer:</Text>
+        <Text style={styles.title}>Historial Clínico</Text>
+        <Text style={styles.subtitle}>
+          (En construcción) Luego aquí vamos a ver diagnósticos y consultas por mascota.
+        </Text>
       </View>
 
       <View style={styles.box}>
-        <Button
-          title="Agendar cita"
-          onPress={() => router.push("/citas/crear" as any)}
-          style={styles.btn}
-        />
-
-        <Button
-          title="Próximas citas"
-          onPress={() => router.push("/citas/proximas" as any)}
-          style={styles.btn}
-        />
-
-        <Button
-          title="Volver"
-          variant="ghost"
-          onPress={() => router.back()}
-          style={[styles.btn, { marginTop: 8 }]}
-        />
+        <Button title="Volver" variant="ghost" onPress={() => router.back()} />
       </View>
     </LinearGradient>
   );
@@ -47,8 +32,9 @@ function createStyles(theme: any) {
     screen: { flex: 1, padding: 16 },
     header: { marginTop: 10, marginBottom: 14 },
     title: { color: "#fff", fontSize: 26, fontWeight: "900" },
-    subtitle: { color: "rgba(255,255,255,0.9)", marginTop: 6 },
+    subtitle: { color: "rgba(255,255,255,0.9)", marginTop: 6, lineHeight: 18, fontWeight: "600" },
     box: {
+      marginTop: 10,
       backgroundColor: "rgba(255,255,255,0.12)",
       borderWidth: 1,
       borderColor: "rgba(255,255,255,0.18)",
@@ -56,6 +42,5 @@ function createStyles(theme: any) {
       padding: 14,
       gap: 10,
     },
-    btn: { marginTop: 6 },
   });
 }

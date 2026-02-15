@@ -93,7 +93,22 @@ export default function Dashboard() {
               <Text style={styles.cardTitle}>Mis Citas</Text>
             </View>
             <Text style={styles.cardDesc}>
-              Ver próximas, historial y agendar con doctor.
+              Agendar y ver tus próximas citas.
+            </Text>
+            <Text style={styles.cardCta}>Abrir →</Text>
+          </Pressable>
+
+          {/* ✅ NUEVO: Historial Clínico */}
+          <Pressable
+            onPress={() => go("/historial-clinico" as Href)}
+            style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}
+          >
+            <View style={styles.row}>
+              <Text style={styles.icon}>🩺</Text>
+              <Text style={styles.cardTitle}>Historial Clínico</Text>
+            </View>
+            <Text style={styles.cardDesc}>
+              Consultas, diagnósticos y evolución de tus mascotas.
             </Text>
             <Text style={styles.cardCta}>Abrir →</Text>
           </Pressable>
