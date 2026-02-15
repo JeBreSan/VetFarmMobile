@@ -20,7 +20,7 @@ export function Toast({ visible, text, type = "info", durationMs = 2400, onHide 
     // ✅ totalmente opaco (1.0)
     if (type === "error") return "rgba(185,28,28,1)";
     if (type === "success") return "rgba(21,128,61,1)";
-    return theme.isDark ? "rgba(17,24,39,1)" : "rgba(31,41,55,1)";
+    return theme.isDark ? "rgba(17,24,39,1)" : "rgba(255,255,255,0.70)";
   }, [type, theme.isDark]);
 
   useEffect(() => {

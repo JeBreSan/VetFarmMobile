@@ -29,8 +29,8 @@ app.get("/health", async (req, res) => {
     res.status(500).json({ ok: false, error: String(e) });
   }
 });
-app.get("/version", (req, res) => {
-  res.json({ version: "mascotas-perms-fix-2026-02-08" });
+app.get("/version", (_req, res) => {
+  res.json({ version: "mascotas-1" });
 });
 
 // 🧪 Diagnóstico de versión (para validar deploy)

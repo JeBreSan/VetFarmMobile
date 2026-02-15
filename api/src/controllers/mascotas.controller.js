@@ -83,23 +83,24 @@ export const actualizarMascota = async (req, res) => {
 
     const ownerId = Number(existe.rows[0].propietario_id);
 
-    // Permisos: admin o dueño
+    // permisos: admin o dueño
     if (rol !== "admin" && ownerId !== userId) {
       return res.status(403).json({ mensaje: "Prohibido." });
     }
 
     const { nombre, edad, especie, raza } = req.body;
 
-    // ✅ Usuario: NO puede cambiar especie. (PERO SÍ puede cambiar raza/nombre/edad)
+    // ✅ Usuario NO puede cambiar ESPECIE, pero SÍ puede cambiar raza/nombre/edad
     if (rol !== "admin" && typeof especie !== "undefined") {
-      return res.status(403).json({ mensaje: "Prohibido. No puede cambiar la especie." });
+      return res.status(403).json({
+        mensaje: "Prohibido. No puede cambiar la especie.",
+      });
     }
 
     const fields = [];
     const values = [];
     let idx = 1;
 
-    // nombre
     if (typeof nombre !== "undefined") {
       const n = String(nombre).trim();
       if (!n) return res.status(400).json({ mensaje: "Nombre inválido." });
@@ -107,21 +108,19 @@ export const actualizarMascota = async (req, res) => {
       values.push(n);
     }
 
-    // raza (editable por usuario y admin)
     if (typeof raza !== "undefined") {
       const rza = String(raza).trim();
       fields.push(`raza = $${idx++}`);
       values.push(rza ? rza : null);
     }
 
-    // edad
     if (typeof edad !== "undefined") {
       const e = String(edad).trim();
       fields.push(`edad = $${idx++}`);
       values.push(e ? e : null);
     }
 
-    // especie (solo admin)
+    // solo admin puede cambiar especie
     if (rol === "admin" && typeof especie !== "undefined") {
       const s = String(especie).trim().toLowerCase();
       if (!ESPECIES_VALIDAS.includes(s)) {
@@ -155,7 +154,7 @@ export const actualizarMascota = async (req, res) => {
   }
 };
 
-// DELETE /mascotas/:id (soft delete)
+// DELETE /mascotas/:id
 export const eliminarMascota = async (req, res) => {
   try {
     const userId = Number(req.user?.id);

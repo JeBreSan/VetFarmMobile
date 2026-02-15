@@ -492,7 +492,7 @@ function createStyles(theme: any) {
       paddingHorizontal: 12,
       paddingVertical: 10,
       color: text,
-      backgroundColor: "rgba(0,0,0,0.18)",
+      backgroundColor: "rgba(255,255,255,0.70)",
     },
 
     row: { flexDirection: "row", gap: 10, marginTop: 12 },
@@ -519,7 +519,7 @@ function createStyles(theme: any) {
       alignItems: "center",
       borderWidth: 1,
       borderColor: border,
-      backgroundColor: "rgba(255,255,255,0.12)",
+      backgroundColor: "rgba(126, 85, 241, 0.7)",
     },
     btnText: { color: text, fontWeight: "900" },
 
@@ -534,7 +534,7 @@ function createStyles(theme: any) {
     },
     chipActive: {
       borderColor: "rgba(255,255,255,0.50)",
-      backgroundColor: "rgba(255,255,255,0.20)",
+      backgroundColor: "rgba(255,255,255,0.70)",
     },
     chipText: { color: text, fontWeight: "800", textTransform: "capitalize" },
 
