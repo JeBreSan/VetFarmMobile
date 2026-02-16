@@ -1,9 +1,25 @@
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import React, { useEffect, useMemo, useState } from "react";
-import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import {
+    ActivityIndicator,
+    FlatList,
+    KeyboardAvoidingView,
+    Platform,
+    Pressable,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TextInput,
+    View,
+} from "react-native";
 
-import { apiCrearCita, apiListarCitasOcupadas, apiListarReglasAgenda, type AgendaRegla } from "../../src/services/citasService";
+import {
+    apiCrearCita,
+    apiListarCitasOcupadas,
+    apiListarReglasAgenda,
+    type AgendaRegla,
+} from "../../src/services/citasService";
 import { apiListarMascotas, type Mascota } from "../../src/services/mascotasService";
 
 import { useAppTheme } from "../../src/theme/ThemeProvider";
@@ -74,17 +90,12 @@ function hasHorarioEspecialForDay(rules: AgendaRegla[], day: Date) {
 }
 
 function isAllowedByRules(slot: Date, rules: AgendaRegla[], day: Date) {
-  // 1) CERRADO gana siempre
   const cerrado = rules.some((r) => r.tipo === "CERRADO" && intersects(slot, r));
   if (cerrado) return false;
 
-  // 2) Si existe HORARIO_ESPECIAL ese día => SOLO esos rangos son válidos
   const hasEspecial = hasHorarioEspecialForDay(rules, day);
-  if (hasEspecial) {
-    return rules.some((r) => r.tipo === "HORARIO_ESPECIAL" && intersects(slot, r));
-  }
+  if (hasEspecial) return rules.some((r) => r.tipo === "HORARIO_ESPECIAL" && intersects(slot, r));
 
-  // 3) Si no hay especial y existe siempre_abierto => válido
   return rules.some((r) => r.tipo === "SIEMPRE_ABIERTO");
 }
 
@@ -128,7 +139,6 @@ export default function CrearCita() {
 
   const canConfirm = !!mascotaId && !!slotSel;
 
-  // Cargar mascotas
   useEffect(() => {
     (async () => {
       try {
@@ -144,7 +154,6 @@ export default function CrearCita() {
     })();
   }, []);
 
-  // Cargar reglas + ocupadas cuando cambia el día
   useEffect(() => {
     (async () => {
       try {
@@ -154,15 +163,12 @@ export default function CrearCita() {
         const iniISO = toISO(ini);
         const finISO = toISO(fin);
 
-        const [r, o] = await Promise.all([
-          apiListarReglasAgenda(iniISO, finISO),
-          apiListarCitasOcupadas(iniISO, finISO),
-        ]);
+        const [r, o] = await Promise.all([apiListarReglasAgenda(iniISO, finISO), apiListarCitasOcupadas(iniISO, finISO)]);
 
         setReglas(r);
 
         const set = new Set<string>();
-        for (const it of o) set.add(it.inicio); // ISO exacto como viene de backend
+        for (const it of o) set.add(it.inicio);
         setOcupadas(set);
       } catch (e: any) {
         setToast({ visible: true, text: e?.message || "Error cargando disponibilidad", type: "error" });
@@ -171,21 +177,14 @@ export default function CrearCita() {
   }, [diaSel]);
 
   const slots = useMemo(() => {
-    // Genera slots del día
     const all = buildSlotsForDay(diaSel);
-
-    // Lead time (30 min)
     const now = new Date();
     const lead = new Date(now.getTime() + LEAD_MIN * 60 * 1000);
 
     return all
       .filter((s) => s.getTime() >= lead.getTime())
       .filter((s) => isAllowedByRules(s, reglas, diaSel))
-      .filter((s) => {
-        // Ocupadas: comparo por ISO
-        const iso = s.toISOString();
-        return !ocupadas.has(iso);
-      });
+      .filter((s) => !ocupadas.has(s.toISOString()));
   }, [diaSel, reglas, ocupadas]);
 
   const crear = async () => {
@@ -210,7 +209,6 @@ export default function CrearCita() {
         text: `✅ Cita creada con éxito.\nSu cita para "${nomMasc}" quedó agendada para el ${fechaTxt} a las ${horaTxt}. Recuerde llegar 15 minutos antes.`,
       });
 
-      // refrescar ocupadas para que el slot desaparezca
       setOcupadas((prev) => {
         const n = new Set(prev);
         n.add(created.inicio);
@@ -222,8 +220,7 @@ export default function CrearCita() {
     } catch (e: any) {
       if (e?.message === "SLOT_OCUPADO") {
         setToast({ visible: true, type: "error", text: "Ese horario ya fue tomado. Elegí otro por favor." });
-        // refrescar lista (por si el backend tomó ese slot)
-        setDiaSel((d) => new Date(d)); // trigger
+        setDiaSel((d) => new Date(d));
         return;
       }
       setToast({ visible: true, type: "error", text: e?.message || "Error creando cita" });
@@ -243,89 +240,91 @@ export default function CrearCita() {
 
   return (
     <LinearGradient colors={theme.gradients.brand as any} style={styles.screen}>
-      <View style={styles.header}>
-        <Text style={styles.title}>Agendar cita</Text>
-        <Text style={styles.subtitle}>Seleccioná mascota, día y hora disponible.</Text>
-      </View>
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+        <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
+          <View style={styles.header}>
+            <Text style={styles.title}>Agendar cita</Text>
+            <Text style={styles.subtitle}>Seleccioná mascota, día y hora disponible.</Text>
+          </View>
 
-      <Card style={styles.card}>
-        <Text style={styles.section}>Mascota</Text>
-        <View style={styles.pills}>
-          {mascotas.map((m) => {
-            const active = m.id === mascotaId;
-            return (
-              <Pressable
-                key={m.id}
-                onPress={() => setMascotaId(m.id)}
-                style={[styles.pill, active && styles.pillActive]}
-              >
-                <Text style={[styles.pillText, active && styles.pillTextActive]} numberOfLines={1}>
-                  {m.nombre}
-                </Text>
-              </Pressable>
-            );
-          })}
-        </View>
+          <Card style={styles.card}>
+            <Text style={styles.section}>Mascota</Text>
+            <View style={styles.pills}>
+              {mascotas.map((m) => {
+                const active = m.id === mascotaId;
+                return (
+                  <Pressable key={m.id} onPress={() => setMascotaId(m.id)} style={[styles.pill, active && styles.pillActive]}>
+                    <Text style={[styles.pillText, active && styles.pillTextActive]} numberOfLines={1}>
+                      {m.nombre}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
 
-        <Text style={[styles.section, { marginTop: 14 }]}>Día</Text>
-        <View style={styles.pills}>
-          {dias.map((d) => {
-            const active = sameDay(d, diaSel);
-            return (
-              <Pressable
-                key={d.toISOString()}
-                onPress={() => setDiaSel(startOfDay(d))}
-                style={[styles.pill, active && styles.pillActive]}
-              >
-                <Text style={[styles.pillText, active && styles.pillTextActive]}>{formatDateCR(d)}</Text>
-              </Pressable>
-            );
-          })}
-        </View>
+            <Text style={[styles.section, { marginTop: 14 }]}>Día</Text>
+            <View style={styles.pills}>
+              {dias.map((d) => {
+                const active = sameDay(d, diaSel);
+                return (
+                  <Pressable
+                    key={d.toISOString()}
+                    onPress={() => setDiaSel(startOfDay(d))}
+                    style={[styles.pill, active && styles.pillActive]}
+                  >
+                    <Text style={[styles.pillText, active && styles.pillTextActive]}>{formatDateCR(d)}</Text>
+                  </Pressable>
+                );
+              })}
+            </View>
 
-        <Text style={[styles.section, { marginTop: 14 }]}>Hora disponible</Text>
+            <Text style={[styles.section, { marginTop: 14 }]}>Hora disponible</Text>
 
-        {slots.length === 0 ? (
-          <Text style={styles.empty}>No hay horarios disponibles para este día.</Text>
-        ) : (
-          <FlatList
-            data={slots}
-            keyExtractor={(it) => it.toISOString()}
-            numColumns={4}
-            columnWrapperStyle={{ gap: 8 }}
-            contentContainerStyle={{ gap: 8, marginTop: 8 }}
-            renderItem={({ item }) => {
-              const active = slotSel?.toISOString() === item.toISOString();
-              return (
-                <Pressable onPress={() => setSlotSel(item)} style={[styles.timeBox, active && styles.timeBoxActive]}>
-                  <Text style={[styles.timeText, active && styles.timeTextActive]}>{formatTime(item)}</Text>
-                </Pressable>
-              );
-            }}
-          />
-        )}
+            {slots.length === 0 ? (
+              <Text style={styles.empty}>No hay horarios disponibles para este día.</Text>
+            ) : (
+              <View style={styles.hoursBox}>
+                <FlatList
+                  data={slots}
+                  keyExtractor={(it) => it.toISOString()}
+                  numColumns={4}
+                  scrollEnabled
+                  showsVerticalScrollIndicator
+                  columnWrapperStyle={{ gap: 8 }}
+                  contentContainerStyle={{ gap: 8, marginTop: 8, paddingBottom: 8 }}
+                  renderItem={({ item }) => {
+                    const active = slotSel?.toISOString() === item.toISOString();
+                    return (
+                      <Pressable onPress={() => setSlotSel(item)} style={[styles.timeBox, active && styles.timeBoxActive]}>
+                        <Text style={[styles.timeText, active && styles.timeTextActive]}>{formatTime(item)}</Text>
+                      </Pressable>
+                    );
+                  }}
+                />
+              </View>
+            )}
 
-        <Text style={[styles.section, { marginTop: 14 }]}>Comentarios</Text>
-        <View style={styles.inputWrap}>
-          <TextInput
-            value={comentario}
-            onChangeText={setComentario}
-            placeholder="Ej: vómitos, dolor, revisión general..."
-            placeholderTextColor={theme.isDark ? "rgba(230,234,242,0.35)" : "rgba(16,24,40,0.35)"}
-            style={[styles.input, { color: theme.colors.text }]}
-            multiline
-          />
-        </View>
+            <Text style={[styles.section, { marginTop: 14 }]}>Comentarios</Text>
+            <View style={styles.inputWrap}>
+              <TextInput
+                value={comentario}
+                onChangeText={setComentario}
+                placeholder="Ej: vómitos, dolor, revisión general..."
+                placeholderTextColor={theme.isDark ? "rgba(230,234,242,0.35)" : "rgba(16,24,40,0.35)"}
+                style={[styles.input, { color: theme.colors.text }]}
+                multiline
+              />
+            </View>
 
-        <View style={{ marginTop: 14, gap: 10 }}>
-          <Button
-            title="Confirmar cita"
-            disabled={!canConfirm}
-            onPress={() => setConfirmOpen(true)}
-          />
-          <Button title="Volver" variant="ghost" onPress={() => router.back()} />
-        </View>
-      </Card>
+            <View style={{ marginTop: 14, gap: 10 }}>
+              <Button title="Confirmar cita" disabled={!canConfirm} onPress={() => setConfirmOpen(true)} />
+              <Button title="Volver" variant="ghost" onPress={() => router.back()} />
+            </View>
+          </Card>
+
+          <View style={{ height: 18 }} />
+        </ScrollView>
+      </KeyboardAvoidingView>
 
       <ConfirmDialog
         visible={confirmOpen}
@@ -342,12 +341,7 @@ export default function CrearCita() {
         onCancel={() => setConfirmOpen(false)}
       />
 
-      <Toast
-        visible={toast.visible}
-        text={toast.text}
-        type={toast.type}
-        onHide={() => setToast((p) => ({ ...p, visible: false }))}
-      />
+      <Toast visible={toast.visible} text={toast.text} type={toast.type} onHide={() => setToast((p) => ({ ...p, visible: false }))} />
     </LinearGradient>
   );
 }
@@ -355,6 +349,8 @@ export default function CrearCita() {
 function createStyles(theme: any) {
   return StyleSheet.create({
     screen: { flex: 1, padding: 16 },
+    scrollContent: { paddingBottom: 24 },
+
     header: { marginTop: 10, marginBottom: 14 },
     title: { color: "#fff", fontSize: 26, fontWeight: "900" },
     subtitle: { color: "rgba(255,255,255,0.9)", marginTop: 6 },
@@ -383,6 +379,11 @@ function createStyles(theme: any) {
     },
     pillText: { color: "rgba(255,255,255,0.88)", fontWeight: "800", fontSize: 12 },
     pillTextActive: { color: "#fff" },
+
+    hoursBox: {
+      marginTop: 8,
+      maxHeight: 320, // ✅ clave: evita que tape botones
+    },
 
     timeBox: {
       flex: 1,

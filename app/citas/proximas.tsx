@@ -353,26 +353,29 @@ export default function ProximasCitas() {
             ) : slots.length === 0 ? (
               <Text style={[styles.small, { marginTop: 10 }]}>No hay horarios disponibles.</Text>
             ) : (
-              <View style={{ marginTop: 10, gap: 8 }}>
-                <FlatList
-                  data={slots}
-                  keyExtractor={(it) => it.toISOString()}
-                  numColumns={4}
-                  columnWrapperStyle={{ gap: 8 }}
-                  contentContainerStyle={{ gap: 8 }}
-                  renderItem={({ item }) => {
-                    const active = slotSel?.toISOString() === item.toISOString();
-                    return (
-                      <Pressable
-                        onPress={() => setSlotSel(item)}
-                        style={[styles.timeBox, active && styles.timeBoxActive]}
-                      >
-                        <Text style={[styles.timeText, active && styles.timeTextActive]}>{formatTime(item)}</Text>
-                      </Pressable>
-                    );
-                  }}
-                />
-              </View>
+              <View style={{ marginTop: 10, gap: 8, maxHeight: 320 }}>
+  <FlatList
+    data={slots}
+    keyExtractor={(it) => it.toISOString()}
+    numColumns={4}
+    scrollEnabled
+    showsVerticalScrollIndicator
+    columnWrapperStyle={{ gap: 8 }}
+    contentContainerStyle={{ gap: 8, paddingBottom: 10 }}
+    renderItem={({ item }) => {
+      const active = slotSel?.toISOString() === item.toISOString();
+      return (
+        <Pressable
+          onPress={() => setSlotSel(item)}
+          style={[styles.timeBox, active && styles.timeBoxActive]}
+        >
+          <Text style={[styles.timeText, active && styles.timeTextActive]}>{formatTime(item)}</Text>
+        </Pressable>
+      );
+    }}
+  />
+</View>
+
             )}
 
             <View style={{ marginTop: 14, gap: 10 }}>

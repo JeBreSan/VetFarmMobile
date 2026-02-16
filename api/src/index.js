@@ -13,6 +13,7 @@ import perfilRoutes from "./routes/perfil.routes.js";
 
 import agendaRoutes from "./routes/agenda.js";
 import citasRoutes from "./routes/citas.js";
+import historialRoutes from "./routes/historial.js";
 
 const app = express();
 
@@ -46,6 +47,7 @@ app.use("/perfil", perfilRoutes);
 app.use("/mascotas", requireUser, mascotasRoutes);
 app.use("/agenda", requireUser, agendaRoutes);
 app.use("/citas", requireUser, citasRoutes);
+app.use("/historial", requireUser, historialRoutes);
 
 const PORT = process.env.PORT || 3000;
 
