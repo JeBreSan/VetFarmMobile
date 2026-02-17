@@ -2,13 +2,13 @@ import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import React, { useEffect, useMemo, useState } from "react";
 import {
-    ActivityIndicator,
-    FlatList,
-    Modal,
-    Pressable,
-    StyleSheet,
-    Text,
-    View,
+  ActivityIndicator,
+  FlatList,
+  Modal,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
 } from "react-native";
 
 import { useAppTheme } from "../../src/theme/ThemeProvider";
@@ -18,13 +18,13 @@ import { ConfirmDialog } from "../../src/ui/ConfirmDialog";
 import { Toast } from "../../src/ui/Toast";
 
 import {
-    apiEliminarCita,
-    apiListarCitasOcupadas,
-    apiListarProximasCitas,
-    apiListarReglasAgenda,
-    apiReprogramarCita,
-    type AgendaRegla,
-    type Cita,
+  apiEliminarCita,
+  apiListarCitasOcupadas,
+  apiListarProximasCitas,
+  apiListarReglasAgenda,
+  apiReprogramarCita,
+  type AgendaRegla,
+  type Cita,
 } from "../../src/services/citasService";
 
 const SLOT_MIN = 30;
@@ -50,7 +50,11 @@ function endOfDay(d: Date) {
   return x;
 }
 function sameDay(a: Date, b: Date) {
-  return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+  return (
+    a.getFullYear() === b.getFullYear() &&
+    a.getMonth() === b.getMonth() &&
+    a.getDate() === b.getDate()
+  );
 }
 function buildSlotsForDay(day: Date) {
   const base = startOfDay(day);
@@ -72,7 +76,13 @@ function intersects(slot: Date, rule: AgendaRegla) {
   return x >= a && x < b;
 }
 function hasHorarioEspecialForDay(rules: AgendaRegla[], day: Date) {
-  return rules.some((r) => r.tipo === "HORARIO_ESPECIAL" && r.inicio && r.fin && sameDay(new Date(r.inicio), day));
+  return rules.some(
+    (r) =>
+      r.tipo === "HORARIO_ESPECIAL" &&
+      r.inicio &&
+      r.fin &&
+      sameDay(new Date(r.inicio), day)
+  );
 }
 function isAllowedByRules(slot: Date, rules: AgendaRegla[], day: Date) {
   // CERRADO gana siempre
@@ -109,7 +119,11 @@ export default function ProximasCitas() {
   // Delete confirm
   const [confirmDel, setConfirmDel] = useState(false);
 
-  const [toast, setToast] = useState<{ visible: boolean; text: string; type: "success" | "error" | "info" }>({
+  const [toast, setToast] = useState<{
+    visible: boolean;
+    text: string;
+    type: "success" | "error" | "info";
+  }>({
     visible: false,
     text: "",
     type: "info",
@@ -260,10 +274,20 @@ export default function ProximasCitas() {
             contentContainerStyle={{ gap: 10 }}
             renderItem={({ item }) => {
               const d = new Date(item.inicio);
+
+              // ✅ si el backend manda mascota_nombre, lo mostramos
+              const mascotaNombre =
+                (item as any)?.mascota_nombre ||
+                (item as any)?.mascotaNombre ||
+                (item as any)?.mascota ||
+                null;
+
               return (
                 <Pressable onPress={() => openFicha(item)} style={styles.item}>
                   <View style={{ flex: 1 }}>
-                    <Text style={styles.itemTitle}>Cita #{item.id}</Text>
+                    <Text style={styles.itemTitle}>
+                      {mascotaNombre ? `Cita ${mascotaNombre}` : `Cita #${item.id}`}
+                    </Text>
                     <Text style={styles.itemDesc}>
                       {formatDateCR(d)} — {formatTime(d)}
                     </Text>
@@ -322,7 +346,8 @@ export default function ProximasCitas() {
 
       {/* Modal Reprogramar */}
       <Modal visible={reprogOpen} transparent animationType="fade">
-        <Pressable style={styles.backdrop} onPress={() => setReprogOpen(false)} />
+        {/* ✅ backdrop más fuerte para TAPAR todo lo de atrás */}
+        <Pressable style={styles.backdropStrong} onPress={() => setReprogOpen(false)} />
         <View style={styles.center}>
           <Card style={styles.modalCard}>
             <Text style={styles.modalTitle}>Reprogramar cita</Text>
@@ -337,7 +362,9 @@ export default function ProximasCitas() {
                     onPress={() => setDiaSel(startOfDay(d))}
                     style={[styles.pill, active && styles.pillActive]}
                   >
-                    <Text style={[styles.pillText, active && styles.pillTextActive]}>{formatDateCR(d)}</Text>
+                    <Text style={[styles.pillText, active && styles.pillTextActive]}>
+                      {formatDateCR(d)}
+                    </Text>
                   </Pressable>
                 );
               })}
@@ -354,32 +381,37 @@ export default function ProximasCitas() {
               <Text style={[styles.small, { marginTop: 10 }]}>No hay horarios disponibles.</Text>
             ) : (
               <View style={{ marginTop: 10, gap: 8, maxHeight: 320 }}>
-  <FlatList
-    data={slots}
-    keyExtractor={(it) => it.toISOString()}
-    numColumns={4}
-    scrollEnabled
-    showsVerticalScrollIndicator
-    columnWrapperStyle={{ gap: 8 }}
-    contentContainerStyle={{ gap: 8, paddingBottom: 10 }}
-    renderItem={({ item }) => {
-      const active = slotSel?.toISOString() === item.toISOString();
-      return (
-        <Pressable
-          onPress={() => setSlotSel(item)}
-          style={[styles.timeBox, active && styles.timeBoxActive]}
-        >
-          <Text style={[styles.timeText, active && styles.timeTextActive]}>{formatTime(item)}</Text>
-        </Pressable>
-      );
-    }}
-  />
-</View>
-
+                <FlatList
+                  data={slots}
+                  keyExtractor={(it) => it.toISOString()}
+                  numColumns={4}
+                  scrollEnabled
+                  showsVerticalScrollIndicator
+                  columnWrapperStyle={{ gap: 8 }}
+                  contentContainerStyle={{ gap: 8, paddingBottom: 10 }}
+                  renderItem={({ item }) => {
+                    const active = slotSel?.toISOString() === item.toISOString();
+                    return (
+                      <Pressable
+                        onPress={() => setSlotSel(item)}
+                        style={[styles.timeBox, active && styles.timeBoxActive]}
+                      >
+                        <Text style={[styles.timeText, active && styles.timeTextActive]}>
+                          {formatTime(item)}
+                        </Text>
+                      </Pressable>
+                    );
+                  }}
+                />
+              </View>
             )}
 
             <View style={{ marginTop: 14, gap: 10 }}>
-              <Button title="Confirmar reprogramación" disabled={!slotSel} onPress={confirmarReprog} />
+              <Button
+                title="Confirmar reprogramación"
+                disabled={!slotSel}
+                onPress={confirmarReprog}
+              />
               <Button title="Cancelar" variant="ghost" onPress={() => setReprogOpen(false)} />
             </View>
           </Card>
@@ -430,9 +462,17 @@ function createStyles(theme: any) {
     itemDesc: { marginTop: 4, color: "rgba(255,255,255,0.85)", fontWeight: "700", fontSize: 12 },
     itemCta: { color: "#fff", fontWeight: "900" },
 
-    backdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(0,0,0,0.45)" },
+    // ✅ backdrops
+    backdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(0,0,0,0.65)" },
+    backdropStrong: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(0,0,0,0.88)" },
+
     center: { flex: 1, padding: 18, alignItems: "center", justifyContent: "center" },
-    modalCard: { width: "100%", maxWidth: 560, backgroundColor: "rgba(255,255,255,0.12)", borderColor: "rgba(255,255,255,0.18)" },
+    modalCard: {
+      width: "100%",
+      maxWidth: 560,
+      backgroundColor: "rgba(255,255,255,0.12)",
+      borderColor: "rgba(255,255,255,0.18)",
+    },
     modalTitle: { color: "#fff", fontSize: 18, fontWeight: "900" },
 
     row: { flexDirection: "row", alignItems: "center", gap: 10 },
